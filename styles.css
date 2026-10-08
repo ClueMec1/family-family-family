@@ -258,3 +258,12 @@ select{background:var(--raised);border:1px solid var(--line);border-radius:7px;p
 .editor-pane .toolbar{flex-wrap:nowrap}
 .editor-pane .files{flex:1 1 auto}
 .editor-pane .spacer{flex:0 0 0}
+
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.checks li{display:flex;flex-direction:column;gap:2px;padding:8px 10px 8px 30px;border-radius:9px;background:var(--bg);position:relative;font-size:13px}
+.checks li::before{position:absolute;left:10px;top:8px;font-weight:700}
+.checks li.ok::before{content:"✓";color:var(--ok)}
+.checks li.bad::before{content:"✕";color:var(--err)}
+.checks li.warn::before{content:"!";color:var(--warn)}
+.checks span{color:var(--muted);overflow-wrap:anywhere}
+.checks code,.sheet-card code{font-family:var(--code);font-size:12px}

@@ -740,6 +740,34 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
   if (isIOS && !standalone) $('installApp').hidden = false;
   $('installApp').onclick = installSelf;
 
+  /* Install check: shows what is stopping Chrome from installing HTML Runner on this device */
+  let swError = '';
+  async function installCheck() {
+    const rows = [];
+    const add = (ok, label, detail) => rows.push(`<li class="${ok === true ? 'ok' : ok === false ? 'bad' : 'warn'}"><b>${esc(label)}</b>${detail ? '<span>' + detail + '</span>' : ''}</li>`);
+    add(location.protocol === 'https:' || location.hostname === 'localhost', 'Served over https',
+      location.protocol === 'file:' ? 'Opened from a file. Upload the folder to a host (see README) and open its https address.' : esc(location.origin));
+    let man = null;
+    try { man = await (await fetch('manifest.webmanifest', { cache: 'no-store' })).json(); } catch (e) {}
+    add(!!(man && man.id), 'App manifest found', man ? 'App id: <code>' + esc(man.id) + '</code>' : 'manifest.webmanifest did not load. The files were not all uploaded, or the host serves a different app at this address.');
+    let homeJs = false;
+    try { const r = await fetch('home.js', { cache: 'no-store' }); homeJs = r.ok && /hr:apps/.test(await r.text()); } catch (e) {}
+    add(homeJs, 'All app files uploaded', homeJs ? '' : 'home.js is missing or the host returns a different page for it.');
+    const reg = navigator.serviceWorker ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
+    add(!!(reg && reg.active), 'Offline support (service worker) running', reg && reg.active ? '' : (swError ? esc(swError) : 'Not running yet. Reload the page once.'));
+    if (standalone) add(true, 'You are using the installed app', '');
+    else if (deferredInstall) add(true, 'Chrome is ready to install', 'Tap Install below.');
+    else add(null, 'Chrome has not offered to install yet',
+      'Either Chrome still thinks an older copy is installed for this address, or you are in an incognito window, or this browser cannot install apps (Firefox on a computer, for example). See the fix below.');
+    const body = `<ul class="checks">${rows.join('')}</ul>
+      <p><b>Chrome says “already installed” but it won't open?</b> Chrome kept a record of an old copy.</p>
+      <ol><li>Phone: long-press any old HTML Runner icon and uninstall it. Then in Android Settings → Apps, remove any leftover “HTML Runner”.</li>
+      <li>Computer: open <code>chrome://apps</code>, right-click HTML Runner, choose <b>Remove from Chrome</b>.</li>
+      <li>In Chrome: ⋮ → Settings → Privacy and security → Site settings → View permissions and data stored across sites, find this site and tap <b>Delete data</b>. This also deletes apps saved on HTML Runner's Home screen.</li>
+      <li>Close Chrome completely, open this address again, reload once, then install.</li></ol>`;
+    sheet({ title: 'Install check', body, actions: [{ label: 'Close' }].concat(deferredInstall ? [{ label: 'Install', primary: true, onClick: () => { installSelf(); } }] : []) });
+  }
+
   async function installSelf() {
     if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; return; }
     sheet({
@@ -774,7 +802,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
 
   /* ---------------- service worker ---------------- */
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker failed', e));
+    navigator.serviceWorker.register('sw.js').catch((e) => { swError = 'Could not start: ' + (e && e.message || e); console.warn('Service worker failed', e); });
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && mode === 'connected') { reloaded = true; run(); } });
   }
@@ -792,7 +820,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     whenEditor: editor.whenReady,
     showCode: (k) => { showView('code'); showPane('editor'); if (k) switchFile(k); },
     onView: (fn) => viewHooks.push(fn),
-    buildPage, previewLink, installSelf, installSheet,
+    buildPage, previewLink, installSelf, installSheet, installCheck,
     canServe: () => swActive() && 'caches' in window,
     openInBrowser: (url) => { showView('browser'); browser.open(url, true); },
     projectName: () => work.name,

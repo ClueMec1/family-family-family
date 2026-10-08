@@ -18,13 +18,6 @@
     moss: { name: 'Moss', css: 'radial-gradient(100% 70% at 80% 10%,#2f4a2a 0%,transparent 60%),radial-gradient(90% 60% at 0% 90%,#1d3a36 0%,transparent 65%),#0b110d' },
     graphite: { name: 'Graphite', css: '#0c0f15' },
   };
-  const SUGGEST = [
-    { name: 'Wikipedia', url: 'https://en.m.wikipedia.org/', color: '#f2efe8' },
-    { name: 'Photopea', url: 'https://www.photopea.com/', color: '#18a497' },
-    { name: 'Excalidraw', url: 'https://excalidraw.com/', color: '#6965db' },
-    { name: 'draw.io', url: 'https://app.diagrams.net/', color: '#f08705' },
-    { name: 'Squoosh', url: 'https://squoosh.app/', color: '#ff3385' },
-  ];
   const MAX_RUNNING = 5;
 
   // Clean up entries left by older versions of HTML Runner, which used the same storage name
@@ -43,7 +36,7 @@
   const rawApps = store.get('hr:apps', []);
   let apps = cleanApps(rawApps);
   if (!Array.isArray(rawApps) || apps.length !== rawApps.length) store.set('hr:apps', apps);
-  let prefs = store.get('hr:homeprefs', { wall: 'ember', suggest: true });
+  let prefs = store.get('hr:homeprefs', { wall: 'ember' });
   const running = new Map(); // id -> { frame, last }
   let openId = null;
   const save = () => store.set('hr:apps', apps);
@@ -95,7 +88,7 @@
     $('home').style.setProperty('--wall', (WALLS[prefs.wall] || WALLS.ember).css);
     if (!apps.length) {
       const e = document.createElement('div'); e.className = 'gempty';
-      e.innerHTML = '<b>No apps yet</b><span>Open a site in Browser and tap <em>Add</em>, or add one of the suggestions below. Your own code can become an app too: Code → ⋯ → Add to Home screen.</span>';
+      e.innerHTML = '<b>No apps yet</b><span>Open a site in Browser and tap <em>Add</em> to put it here. Your own code can become an app too: Code → ⋯ → Add to Home screen.</span>';
       grid.append(e);
     }
     apps.forEach((app) => {
@@ -108,21 +101,6 @@
       bindPress(b, () => openApp(app.id), () => editApp(app.id));
       grid.append(b);
     });
-    // suggestions
-    const row = $('suggestRow'); row.innerHTML = '';
-    const left = SUGGEST.filter((s) => !apps.some((a) => a.kind === 'web' && sameUrl(a.url) === sameUrl(s.url)));
-    const codeAdded = apps.some((a) => a.kind === 'code');
-    $('suggest').hidden = !prefs.suggest || (!left.length && codeAdded);
-    if (!codeAdded) row.append(suggestChip({ name: 'My code', kind: 'code', color: '#ffb547' }, () => addCodeToHome()));
-    left.forEach((s) => row.append(suggestChip(s, () => addApp({ name: s.name, url: s.url, color: s.color, icon: faviconFor(s.url) }))));
-  }
-  function suggestChip(s, onAdd) {
-    const c = document.createElement('button'); c.type = 'button'; c.className = 'schip';
-    c.append(iconEl({ ...s, icon: s.url ? faviconFor(s.url) : null }, 30));
-    const t = document.createElement('span'); t.textContent = s.name; c.append(t);
-    const plus = document.createElement('i'); plus.className = 'plus'; plus.textContent = '+'; c.append(plus);
-    c.onclick = onAdd;
-    return c;
   }
   const faviconFor = (url) => 'https://www.google.com/s2/favicons?sz=128&domain_url=' + encodeURIComponent(new URL(url).origin);
 
@@ -416,7 +394,7 @@
   };
   $('hSettings').onclick = () => {
     const wrap = document.createElement('div'); wrap.className = 'asheet';
-    wrap.innerHTML = '<div class="field"><span>Wallpaper</span><div class="walls"></div></div><label class="menu-check"><input type="checkbox" id="prefSuggest"> Show suggested apps</label>';
+    wrap.innerHTML = '<div class="field"><span>Wallpaper</span><div class="walls"></div></div>';
     const w = wrap.querySelector('.walls');
     Object.entries(WALLS).forEach(([k, v]) => {
       const b = document.createElement('button'); b.type = 'button'; b.style.background = v.css; b.setAttribute('aria-pressed', String(prefs.wall === k));
@@ -424,10 +402,8 @@
       b.onclick = () => { prefs.wall = k; savePrefs(); render(); w.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); };
       w.append(b);
     });
-    const cb = wrap.querySelector('#prefSuggest'); cb.checked = prefs.suggest;
-    cb.onchange = () => { prefs.suggest = cb.checked; savePrefs(); render(); };
     const acts = [{ label: 'Done', primary: true }];
-    if (!matchMedia('(display-mode: standalone)').matches) acts.unshift({ label: 'Install HTML Runner', onClick: () => { HR.installSelf(); } });
+    acts.unshift({ label: 'Install check', onClick: () => { HR.installCheck(); } });
     HR.sheet({ title: 'Home screen', body: wrap, actions: acts });
   };
 

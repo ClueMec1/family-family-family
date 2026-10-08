@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HTML Runner</title>
+<meta name="description" content="Write HTML, CSS and JavaScript with VS Code-style suggestions, run it live, browse the web and get AI help — works offline once installed.">
+<meta name="theme-color" content="#0c0f15">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HTML Runner">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><b>&lt;/&gt;</b><span>HTML Runner</span></div>
+  <nav class="views" id="views" aria-label="Sections">
+    <button data-view="code" aria-current="true"><svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg><span>Code</span></button>
+    <button data-view="browser"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Browser</span></button>
+    <button data-view="ai"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span>AI</span></button>
+  </nav>
+  <button class="btn ghost" id="installApp" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span class="t">Install app</span></button>
+</header>
+
+<!-- ============ CODE ============ -->
+<section class="view" id="view-code" data-active>
+  <div class="split" id="split" data-pane="editor">
+    <div class="pane editor-pane">
+      <div class="toolbar">
+        <div class="files" id="fileTabs" role="tablist">
+          <button role="tab" data-file="html" aria-selected="true"><i class="dot html"></i>index.html</button>
+          <button role="tab" data-file="css"><i class="dot css"></i>style.css</button>
+          <button role="tab" data-file="js"><i class="dot js"></i>script.js</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn icon" id="menuBtn" aria-haspopup="true" title="Project menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+        <button class="btn run" id="runBtn" title="Run (Ctrl/⌘ + Enter)"><svg viewBox="0 0 24 24" class="fill"><path d="M7 4l13 8-13 8z"/></svg>Run</button>
+      </div>
+      <div class="menu" id="menu" hidden>
+        <div class="menu-head"><span id="projName">Untitled project</span></div>
+        <button data-act="new">New project…</button>
+        <button data-act="save">Save project</button>
+        <button data-act="saveas">Save as…</button>
+        <button data-act="open">Open saved project…</button>
+        <hr>
+        <button data-act="upload">Upload files (.html .css .js)</button>
+        <button data-act="download">Download as one .html file</button>
+        <button data-act="format">Format current file</button>
+        <hr>
+        <label class="menu-check"><input type="checkbox" id="autoRun"> Auto-run while typing</label>
+        <label class="menu-check"><input type="checkbox" id="aiComplete"> AI autocomplete (uses your AI model)</label>
+        <label class="menu-check"><input type="checkbox" id="wrapLines"> Wrap long lines</label>
+      </div>
+      <div class="editor-host" id="editorHost">
+        <div class="loading" id="editorLoading">Loading the editor…</div>
+      </div>
+      <input type="file" id="fileInput" accept=".html,.htm,.css,.js,.mjs,.txt" multiple hidden>
+    </div>
+
+    <div class="pane preview-pane" id="previewPane">
+      <div class="toolbar">
+        <div class="seg" id="mode" role="radiogroup" aria-label="Preview mode">
+          <button role="radio" data-mode="connected" aria-checked="true" title="Runs as a real page on this app's address. Firebase, fetch, logins and storage work.">Connected</button>
+          <button role="radio" data-mode="isolated" aria-checked="false" title="Runs in a locked sandbox with no access to this app's storage. Use for code you don't trust.">Isolated</button>
+        </div>
+        <select id="device" title="Preview width" aria-label="Preview width">
+          <option value="100%">Full width</option>
+          <option value="820px">Tablet</option>
+          <option value="390px">Phone</option>
+        </select>
+        <div class="spacer"></div>
+        <span class="meta" id="runInfo">Not run yet</span>
+        <button class="btn icon" id="toBrowser" title="Open in the built-in browser"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></button>
+        <button class="btn icon" id="popOut" title="Open in a new browser tab"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+      </div>
+      <div class="stage" id="stage"><div class="frame-wrap" id="frameWrap"></div></div>
+      <div class="console closed" id="console">
+        <button class="con-head" id="conHead" aria-expanded="false">
+          <span>Console <i class="count" id="count">0</i></span>
+          <span class="meta" id="conClear" role="button" tabindex="0">Clear</span>
+        </button>
+        <div class="log" id="log"><div class="empty">console.log output and errors from your page show up here.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pane-switch" id="paneSwitch">
+    <button data-pane="editor" aria-pressed="true">Code</button>
+    <button data-pane="preview" aria-pressed="false">Preview</button>
+  </div>
+</section>
+
+<!-- ============ BROWSER ============ -->
+<section class="view" id="view-browser">
+  <div class="tabstrip" id="tabstrip">
+    <div class="btabs" id="btabs"></div>
+    <button class="btn icon" id="newTab" title="New tab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+  <form class="addr" id="addrForm" autocomplete="off">
+    <button type="button" class="btn icon" id="bBack" title="Back"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button type="button" class="btn icon" id="bFwd" title="Forward"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button type="button" class="btn icon" id="bReload" title="Reload"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+    <label for="addrInput" class="sr">Address</label>
+    <input id="addrInput" type="text" inputmode="url" placeholder="Search or type a web address" spellcheck="false" autocapitalize="off">
+    <button type="button" class="btn icon" id="bStar" title="Bookmark this page"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
+    <button type="button" class="btn" id="bChrome" title="Open this page in Chrome"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5h8.2M9 13.7L4.9 6.6M15 13.7l-4.1 7.1"/></svg><span class="t">Open in Chrome</span></button>
+    <button type="button" class="btn" id="bInstall" title="Install this site as an app"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span class="t">Install</span></button>
+  </form>
+  <div class="bstage" id="bstage"></div>
+  <div class="bstatus" id="bstatus">Page stays blank? That site blocks being shown inside other apps. <button class="link" id="bStatusChrome">Open it in Chrome</button></div>
+</section>
+
+<!-- ============ AI ============ -->
+<section class="view" id="view-ai">
+  <div class="ai-wrap">
+    <aside class="ai-side" id="aiSide">
+      <h2>Model</h2>
+      <label class="field"><span>Provider</span><select id="provider"></select></label>
+      <p class="hint" id="providerNote"></p>
+      <label class="field" id="keyField"><span>API key <a id="keyLink" target="_blank" rel="noopener">Get a free key</a></span>
+        <input id="apiKey" type="password" placeholder="Paste your key" autocomplete="off" spellcheck="false"></label>
+      <label class="field" id="baseField" hidden><span>Base URL (OpenAI-compatible)</span><input id="baseUrl" type="url" placeholder="https://…/v1" spellcheck="false"></label>
+      <label class="field"><span>Model <button class="link" id="refreshModels" type="button">Refresh list</button></span>
+        <input id="modelSearch" type="search" placeholder="Filter models…" spellcheck="false">
+      </label>
+      <label class="menu-check"><input type="checkbox" id="freeOnly" checked> Free models only (where the provider reports prices)</label>
+      <div class="models" id="modelList" role="listbox" aria-label="Models"></div>
+      <p class="hint" id="modelStatus"></p>
+      <hr>
+      <label class="menu-check"><input type="checkbox" id="autoSwitch" checked> When a provider runs out, switch to the next one that's set up</label>
+      <p class="hint">Keys are saved only in this browser on this device. Code you run in <b>Connected</b> mode shares this app's storage, so only run code you trust there.</p>
+    </aside>
+    <div class="chat">
+      <div class="chat-head">
+        <button class="btn ghost" id="aiSideToggle"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span id="currentModel">Choose a model</span></button>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="clearChat">New chat</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <form class="composer" id="composer">
+        <label class="menu-check small"><input type="checkbox" id="withCode" checked> Include my current code</label>
+        <div class="composer-row">
+          <label for="prompt" class="sr">Message</label>
+          <textarea id="prompt" rows="2" placeholder="Ask for code, a fix, or an explanation…"></textarea>
+          <button class="btn run" id="send" type="submit">Send</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- Dialogs built into the page -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h3 id="sheetTitle"></h3>
+    <div id="sheetBody"></div>
+    <div class="sheet-actions" id="sheetActions"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/emmet-monaco-es@5.5.0/dist/emmet-monaco.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script src="app.js"></script>
+<script src="ai.js"></script>
+</body>
+</html>

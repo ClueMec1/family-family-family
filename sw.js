@@ -2,8 +2,8 @@
    - Serves your code preview at ./preview/ as a real page on this site, so Firebase sign-in, fetch and storage behave normally.
    - Serves your own code installed on the Home screen at ./apps/<id>/.
    - Keeps the app and the editor files cached so HTML Runner opens offline. */
-const VERSION = 'hr-v4';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'ai.js', 'home.js', 'manifest.webmanifest',
+const VERSION = 'hr-v7';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'complete.js', 'ai.js', 'home.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

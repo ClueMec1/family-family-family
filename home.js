@@ -139,7 +139,7 @@
     f.setAttribute('allowfullscreen', '');
     f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
     if (app.kind === 'code') { const t = await codeUrl(app); if (t.src) f.src = t.src; else f.srcdoc = t.srcdoc; }
-    else f.src = app.url;
+    else f.src = HR.proxy.wrap(app.url);
     f.hidden = true;
     $('appStage').append(f);
     running.set(app.id, { frame: f, last: Date.now() });
@@ -323,11 +323,15 @@
     // 1. same-site page (e.g. your preview) can be read directly
     try { const d = frame && frame.contentDocument; if (d && d.documentElement) info = { ...info, ...(await readDoc(d, frame.contentWindow.location.href)) }; } catch (e) {}
     // 2. sites that allow it can be fetched
+    // (through your page server when it's on: it can read sites that don't allow this)
     if (!info.manifest) {
+      const via = HR.proxy.wrap(url);
+      const real = (u) => (u && HR.proxy.unwrap(u)) || u;
       try {
-        const html = await withTimeout(fetch(url, { credentials: 'omit' }).then((r) => (r.ok ? r.text() : Promise.reject())), 5000);
+        const html = await withTimeout(fetch(via, { credentials: 'omit' }).then((r) => (r.ok ? r.text() : Promise.reject())), 8000);
         const d = new DOMParser().parseFromString(html, 'text/html');
-        const got = await readDoc(d, url);
+        const got = await readDoc(d, via);
+        got.icons = got.icons.map(real); if (got.start) got.start = real(got.start);
         info = { ...info, ...got, title: got.title || info.title, icons: got.icons.concat(info.icons) };
       } catch (e) {}
     }
@@ -404,10 +408,13 @@
     });
     const acts = [{ label: 'Done', primary: true }];
     acts.unshift({ label: 'Install check', onClick: () => { HR.installCheck(); } });
+    acts.unshift({ label: 'Page server', onClick: () => { setTimeout(HR.proxySheet, 0); } });
     HR.sheet({ title: 'Home screen', body: wrap, actions: acts });
   };
 
   HR.onView((name) => { if (name !== 'home' && openId && running.has(openId)) running.get(openId).frame.hidden = true; else if (name === 'home' && openId && running.has(openId)) running.get(openId).frame.hidden = false; });
+  // page server turned on or off: running website apps restart the next time they're opened
+  HR.proxy.onChange(() => { [...running.keys()].forEach((id) => { const a = byId(id); if (a && a.kind === 'web' && id !== openId) closeApp(id, true); }); render(); });
   Object.assign(HR, { addToHome, addCodeToHome, goHome, openApp });
 
   render();

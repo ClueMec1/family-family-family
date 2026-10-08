@@ -307,7 +307,9 @@ if (firebaseConfig.apiKey.startsWith('PASTE')) {
         model: models[current], theme: 'runner', automaticLayout: true,
         fontFamily: 'IBM Plex Mono, ui-monospace, Menlo, Consolas, monospace', fontSize: isPhone() ? 14 : 13, lineHeight: 21,
         minimap: { enabled: !isPhone() }, tabSize: 2, wordWrap: store.get('hr:wrap', false) ? 'on' : 'off',
-        quickSuggestions: { other: true, comments: false, strings: true }, suggestOnTriggerCharacters: true,
+        quickSuggestions: { other: true, comments: false, strings: true }, quickSuggestionsDelay: 0, suggestOnTriggerCharacters: true,
+        wordBasedSuggestions: 'off', tabCompletion: 'on',
+        suggest: { filterGraceful: true, localityBonus: true, snippetsPreventQuickSuggestions: false, showWords: false, preview: true, selectionMode: 'always', insertMode: 'replace' },
         acceptSuggestionOnEnter: 'smart', snippetSuggestions: 'top', parameterHints: { enabled: true },
         inlineSuggest: { enabled: true }, bracketPairColorization: { enabled: true }, autoClosingBrackets: 'always',
         formatOnPaste: true, linkedEditing: true, fixedOverflowWidgets: true, scrollBeyondLastLine: false,
@@ -583,6 +585,84 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     else if (act === 'format') { if (ed) ed.getAction('editor.action.formatDocument').run(); else toast('Formatting needs the full editor'); }
   });
 
+  /* ---------------- page server ----------------
+     When it's on, the built-in browser and Home screen apps load websites through your own
+     HTML Runner page server (server/server.js) instead of straight from each site. */
+  const proxy = (function () {
+    let cfg = store.get('hr:proxy', { on: false, url: '' });
+    const clean = (u) => String(u || '').trim().replace(/\/+$/, '');
+    const b64 = (s) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const unb64 = (s) => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return atob(s); };
+    const active = () => !!(cfg.on && cfg.url);
+    function wrap(url) {
+      if (!active() || !url) return url;
+      let u; try { u = new URL(url); } catch (e) { return url; }
+      if (!/^https?:$/.test(u.protocol) || u.origin === location.origin || url.startsWith(cfg.url + '/')) return url;
+      return cfg.url + '/p/' + b64(u.origin) + u.pathname + u.search + u.hash;
+    }
+    function unwrap(url) {
+      if (!cfg.url || !url || !String(url).startsWith(cfg.url + '/p/')) return null;
+      const rest = String(url).slice(cfg.url.length + 3), i = rest.indexOf('/');
+      try { const o = unb64(i < 0 ? rest : rest.slice(0, i)); return /^https?:\/\/[^/]+$/.test(o) ? o + (i < 0 ? '/' : rest.slice(i)) : null; } catch (e) { return null; }
+    }
+    async function test(url) {
+      url = clean(url);
+      let u; try { u = new URL(url); } catch (e) { throw new Error('That isn’t a full address. It should start with http:// or https://'); }
+      if (location.protocol === 'https:' && u.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(u.hostname)) {
+        throw new Error('HTML Runner is on https, so the page server must be on https too (Chrome blocks http pages inside https ones).');
+      }
+      let r;
+      try { r = await fetch(url + '/__hr/ping', { cache: 'no-store' }); } catch (e) { throw new Error('Couldn’t reach the server. Is it running, and is the address right?'); }
+      if (r.status === 404) throw new Error('The server answered, but not as a page server. Check the address and the key (/k/…).');
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) throw new Error('That address isn’t an HTML Runner page server.');
+      return true;
+    }
+    function set(next) { cfg = { ...cfg, ...next, url: clean(next.url != null ? next.url : cfg.url) }; store.set('hr:proxy', cfg); changed(); }
+    const hooks = [];
+    function changed() { hooks.forEach((f) => f(cfg)); }
+    // Running everything from server/server.js? It tells us where the page server is.
+    if (!cfg.url && location.protocol.startsWith('http')) {
+      fetch('hr-proxy.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+        if (j && j.proxy && !cfg.url) set({ on: true, url: j.proxy });
+      }).catch(() => {});
+    }
+    return { get: () => ({ ...cfg }), set, wrap, unwrap, active, test, onChange: (f) => hooks.push(f),
+      host: () => { try { return new URL(cfg.url).host; } catch (e) { return ''; } } };
+  })();
+
+  function proxySheet() {
+    const c = proxy.get();
+    const wrap = document.createElement('div'); wrap.className = 'asheet';
+    wrap.innerHTML = `
+      <p class="hint" style="margin:0 0 10px">Your page server fetches websites for HTML Runner and sends them back, so the browser and your Home screen apps get every page from one address: your server. Start it with <code>node server/server.js</code> (see the README).</p>
+      <label class="menu-check" style="padding:4px 0 10px"><input type="checkbox" id="pxOn"> Load web pages through my page server</label>
+      <label class="field"><span>Page server address</span><input id="pxUrl" type="url" placeholder="https://your-server.example.com/k/your-key" spellcheck="false" autocapitalize="off"></label>
+      <p class="hint" id="pxMsg" style="margin:8px 0 0"></p>`;
+    const on = wrap.querySelector('#pxOn'), url = wrap.querySelector('#pxUrl'), msg = wrap.querySelector('#pxMsg');
+    on.checked = c.on; url.value = c.url;
+    const check = async () => {
+      msg.textContent = 'Checking…';
+      try { await proxy.test(url.value); msg.textContent = '✓ Connected to your page server.'; return true; }
+      catch (e) { msg.textContent = e.message; return false; }
+    };
+    const close = sheet({ title: 'Page server', body: wrap, actions: [
+      { label: 'Test', onClick: () => { check(); return true; } },
+      { label: 'Cancel' },
+      { label: 'Save', primary: true, onClick: () => {
+        const want = on.checked;
+        if (want && !url.value.trim()) { msg.textContent = 'Enter your page server’s address first.'; return true; }
+        if (!want) { proxy.set({ on: false, url: url.value }); toast('Page server off'); return; }
+        check().then((ok) => {
+          if (!ok) return;
+          proxy.set({ on: true, url: url.value }); toast('Pages now load through your server');
+          close();
+        });
+        return true;
+      } },
+    ] });
+  }
+
   /* ---------------- built-in browser ---------------- */
   const browser = (function () {
     let tabs = [], active = null, seq = 0;
@@ -624,7 +704,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
       const div = document.createElement('div'); div.className = 'start';
       div.innerHTML = `<div class="start-inner">
         <h2>Where to?</h2>
-        <p>Type a web address or a search above. Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) will stay blank here. Use Open in Chrome for those.</p>
+        <p>Type a web address or a search above. Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) will stay blank here. Use Open in Chrome for those, or load pages through your own page server (link at the bottom).</p>
         <div class="marks"></div>
         <p>To install a website as an app, open it and press <b>Install</b>.</p></div>`;
       const grid = div.querySelector('.marks');
@@ -653,12 +733,12 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
       return t;
     }
     function load(t, url) {
-      t.url = url; t.title = '';
+      t.url = url; t.title = ''; t.fresh = true;
       const f = document.createElement('iframe');
       f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; web-share; payment');
       f.setAttribute('allowfullscreen', '');
       f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      f.src = url;
+      f.src = proxy.wrap(url);
       f.addEventListener('load', () => {
         try { const d = f.contentDocument; if (d && d.title) { t.title = d.title; renderTabs(); } } catch (e) {}
       });
@@ -678,6 +758,33 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
       $('bFwd').disabled = !(active && active.idx < active.hist.length - 1);
     }
     function select(t) { active = t; show(t); renderTabs(); }
+
+    // Pages from the page server say which page they're on, so the address bar, title and Back keep up.
+    window.addEventListener('message', (e) => {
+      const m = e.data;
+      if (!m || m.__hrProxy !== 1 || typeof m.url !== 'string') return;
+      const t = tabs.find((x) => x.el && x.el.contentWindow === e.source);
+      if (!t) return;
+      if (m.title) t.title = String(m.title).slice(0, 200);
+      if (/^https?:/.test(m.url) && m.url !== t.url) {
+        if (t.fresh) t.hist[t.idx] = m.url;  // the page we asked for moved (a redirect): replace it
+        else { t.hist = t.hist.slice(0, t.idx + 1); t.hist.push(m.url); t.idx = t.hist.length - 1; }
+        t.url = m.url; saveTabs();
+      }
+      t.fresh = false;
+      if (t === active) show(t);
+      renderTabs();
+    });
+    function statusBar() {
+      const on = proxy.active();
+      $('bstatus').innerHTML = on
+        ? `Loading pages through your page server (<b></b>). <button class="link" id="bProxy">Change</button>`
+        : `Page stays blank? That site blocks being shown inside other apps. <button class="link" id="bStatusChrome">Open it in Chrome</button> or <button class="link" id="bProxy">use your page server</button>`;
+      if (on) $('bstatus').querySelector('b').textContent = proxy.host();
+      if ($('bStatusChrome')) $('bStatusChrome').onclick = () => $('bChrome').onclick();
+      $('bProxy').onclick = proxySheet;
+    }
+    proxy.onChange(() => { statusBar(); tabs.forEach((t) => { if (t.url && t.el.tagName === 'IFRAME') load(t, t.url); }); });
     function close(t) {
       const i = tabs.indexOf(t); tabs.splice(i, 1); t.el.remove();
       if (!tabs.length) newTab();
@@ -707,7 +814,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     };
     const currentUrl = () => (active && active.url) || '';
     $('bChrome').onclick = () => { const u = currentUrl(); if (!u) return toast('Open a page first'); openInChrome(u); };
-    $('bStatusChrome').onclick = $('bChrome').onclick;
+    statusBar();
     $('bInstall').onclick = () => {
       if (!active || !active.url) return toast('Open a web page first, then tap Add');
       window.HR.addToHome && HR.addToHome(active.url, active.title, active.el);
@@ -734,50 +841,91 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     }
   }
 
-  let deferredInstall = null;
-  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; $('installApp').hidden = false; });
-  addEventListener('appinstalled', () => { deferredInstall = null; $('installApp').hidden = true; toast('HTML Runner is installed'); });
-  if (isIOS && !standalone) $('installApp').hidden = false;
-  $('installApp').onclick = installSelf;
+  /* ---------------- installing HTML Runner itself ----------------
+     Chrome sends "beforeinstallprompt" once per page load. A small script in <head> catches it
+     before anything else loads (window.__hrInstall), so it can no longer be missed. */
+  const IS = window.__hrInstall || { evt: null, installed: false, start: Date.now(), clicked: false, seen: 0 };
+  const ready = () => !!IS.evt;
+  function updateInstallButton() {
+    const b = $('installApp');
+    b.hidden = standalone || IS.installed;
+    b.querySelector('b').textContent = ready() ? 'Install HTML Runner' : 'Install HTML Runner on this device';
+    b.querySelector('small').textContent = ready() ? 'Opens full screen and works offline' : 'Tap to see what Chrome still needs';
+    b.classList.toggle('ready', ready());
+  }
+  document.addEventListener('hr-installable', () => { updateInstallButton(); refreshCheck && refreshCheck(); });
+  document.addEventListener('hr-installed', () => { updateInstallButton(); toast('HTML Runner is installed'); refreshCheck && refreshCheck(); });
+  $('installApp').onclick = () => (ready() ? installSelf() : installCheck());
+  updateInstallButton();
 
-  /* Install check: shows what is stopping Chrome from installing HTML Runner on this device */
-  let swError = '';
+  async function installedPerChrome() {
+    if (!navigator.getInstalledRelatedApps) return null;
+    try { const apps = await navigator.getInstalledRelatedApps(); return apps.some((a) => a.platform === 'webapp'); } catch (e) { return null; }
+  }
+
+  /* Install check: live list of what Chrome needs before it lets you install */
+  let swError = '', refreshCheck = null;
   async function installCheck() {
-    const rows = [];
-    const add = (ok, label, detail) => rows.push(`<li class="${ok === true ? 'ok' : ok === false ? 'bad' : 'warn'}"><b>${esc(label)}</b>${detail ? '<span>' + detail + '</span>' : ''}</li>`);
-    add(location.protocol === 'https:' || location.hostname === 'localhost', 'Served over https',
-      location.protocol === 'file:' ? 'Opened from a file. Upload the folder to a host (see README) and open its https address.' : esc(location.origin));
-    let man = null;
+    let man = null, homeJs = false;
     try { man = await (await fetch('manifest.webmanifest', { cache: 'no-store' })).json(); } catch (e) {}
-    add(!!(man && man.id), 'App manifest found', man ? 'App id: <code>' + esc(man.id) + '</code>' : 'manifest.webmanifest did not load. The files were not all uploaded, or the host serves a different app at this address.');
-    let homeJs = false;
     try { const r = await fetch('home.js', { cache: 'no-store' }); homeJs = r.ok && /hr:apps/.test(await r.text()); } catch (e) {}
-    add(homeJs, 'All app files uploaded', homeJs ? '' : 'home.js is missing or the host returns a different page for it.');
-    const reg = navigator.serviceWorker ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
-    add(!!(reg && reg.active), 'Offline support (service worker) running', reg && reg.active ? '' : (swError ? esc(swError) : 'Not running yet. Reload the page once.'));
-    if (standalone) add(true, 'You are using the installed app', '');
-    else if (deferredInstall) add(true, 'Chrome is ready to install', 'Tap Install below.');
-    else add(null, 'Chrome has not offered to install yet',
-      'Either Chrome still thinks an older copy is installed for this address, or you are in an incognito window, or this browser cannot install apps (Firefox on a computer, for example). See the fix below.');
-    const body = `<ul class="checks">${rows.join('')}</ul>
-      <p><b>Chrome says “already installed” but it won't open?</b> Chrome kept a record of an old copy.</p>
-      <ol><li>Phone: long-press any old HTML Runner icon and uninstall it. Then in Android Settings → Apps, remove any leftover “HTML Runner”.</li>
+    const isChromium = !!window.chrome || /Chrome|Edg|SamsungBrowser/.test(UA);
+    async function render() {
+      const rows = [];
+      const add = (ok, label, detail) => rows.push(`<li class="${ok === true ? 'ok' : ok === false ? 'bad' : 'warn'}"><b>${esc(label)}</b>${detail ? '<span>' + detail + '</span>' : ''}</li>`);
+      add(location.protocol === 'https:' || location.hostname === 'localhost', 'Served over https',
+        location.protocol === 'file:' ? 'Opened from a file. Upload the folder to a host (see README) and open its https address.' : esc(location.origin));
+      add(!!(man && man.id), 'App manifest found', man ? 'App id: <code>' + esc(man.id) + '</code>' : 'manifest.webmanifest did not load. The files were not all uploaded, or the host serves a different app at this address.');
+      add(homeJs, 'All app files uploaded', homeJs ? '' : 'home.js is missing or the host returns a different page for it.');
+      const reg = navigator.serviceWorker ? await navigator.serviceWorker.getRegistration().catch(() => null) : null;
+      add(!!(reg && reg.active), 'Offline support (service worker) running', reg && reg.active ? '' : (swError ? esc(swError) : 'Not running yet. Reload the page once.'));
+      if (!isChromium) add(false, 'This browser can install apps', 'Use Chrome or Edge. Firefox on a computer and in-app browsers cannot install web apps.');
+      if (standalone) { add(true, 'You are using the installed app', ''); return { rows, done: true }; }
+      const inst = await installedPerChrome();
+      if (inst === true || IS.installed) add(false, 'Chrome says HTML Runner is already installed on this device', 'If you can\'t find or open it, Chrome is keeping a record of an old copy. Follow the steps below.');
+      const secs = Math.round(IS.seen + (document.hidden ? 0 : (Date.now() - IS.start) / 1000));
+      const engaged = IS.clicked && secs >= 30;
+      add(engaged || ready(), 'You tapped the page and used it for 30 seconds',
+        engaged || ready() ? '' : `Chrome waits for this before it offers to install. ${IS.clicked ? 'Tapped ✓' : 'Tap anywhere'} · ${Math.min(secs, 30)} of 30 seconds.`);
+      if (ready()) add(true, 'Chrome is ready to install', 'Tap Install below.');
+      else if (engaged) add(false, 'Chrome is still not offering to install',
+        'Everything Chrome asks for is in place, so Chrome believes a copy is already installed for this address, or it remembers you dismissed the install. Follow the steps below.');
+      else add(null, 'Waiting for Chrome to offer the install', 'This turns green by itself. Keep this open.');
+      return { rows, done: ready() };
+    }
+    const fixes = `<p><b>Chrome won't offer it, or says “already installed” but it won't open:</b></p>
+      <ol><li>Phone: long-press every old HTML Runner icon and uninstall it, then check Android Settings → Apps for a leftover “HTML Runner”.</li>
       <li>Computer: open <code>chrome://apps</code>, right-click HTML Runner, choose <b>Remove from Chrome</b>.</li>
-      <li>In Chrome: ⋮ → Settings → Privacy and security → Site settings → View permissions and data stored across sites, find this site and tap <b>Delete data</b>. This also deletes apps saved on HTML Runner's Home screen.</li>
-      <li>Close Chrome completely, open this address again, reload once, then install.</li></ol>`;
-    sheet({ title: 'Install check', body, actions: [{ label: 'Close' }].concat(deferredInstall ? [{ label: 'Install', primary: true, onClick: () => { installSelf(); } }] : []) });
+      <li>Close Chrome completely and open this address again.</li>
+      <li>Still blocked? Chrome's old record covers this whole address. Put HTML Runner on a <b>new address</b> (README → “Fresh address”) and install from there. This always works.</li></ol>`;
+    const draw = async () => {
+      const { rows } = await render();
+      const body = $('sheetBody'); if (!body || $('sheet').hidden || $('sheetTitle').textContent !== 'Install check') return false;
+      body.innerHTML = `<ul class="checks">${rows.join('')}</ul>${ready() || standalone ? '' : fixes}`;
+      const acts = $('sheetActions');
+      if (ready() && !acts.querySelector('.run')) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn run'; b.textContent = 'Install';
+        b.onclick = () => { $('sheet').hidden = true; installSelf(); }; acts.append(b);
+      }
+      return true;
+    };
+    sheet({ title: 'Install check', body: '<p>Checking…</p>', actions: [{ label: 'Close' }] });
+    await draw();
+    clearInterval(installCheck.t);
+    refreshCheck = draw;
+    installCheck.t = setInterval(async () => { if (!(await draw())) { clearInterval(installCheck.t); refreshCheck = null; } }, 1000);
   }
 
   async function installSelf() {
-    if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; return; }
-    sheet({
-      title: 'Install HTML Runner',
-      body: isIOS
-        ? '<ol><li>Open this page in Safari.</li><li>Tap the Share button.</li><li>Choose <b>Add to Home Screen</b>.</li></ol>'
-        : '<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol><p>If you don\'t see it, make sure HTML Runner is opened from its website address (https), not from a file.</p>' +
-          '<p>Chrome says it\'s already installed but it won\'t open? Chrome is remembering an old copy. In Chrome tap ⋮ → Settings → Site settings → All sites, find this site, tap <b>Delete & reset</b>, then reload and install again.</p>',
-      actions: [{ label: 'OK', primary: true }],
-    });
+    if (IS.evt) {
+      const e = IS.evt; IS.evt = null;
+      e.prompt();
+      const choice = await e.userChoice.catch(() => ({}));
+      if (choice.outcome === 'dismissed') toast('Install cancelled. Chrome may wait a while before offering it again.');
+      updateInstallButton();
+      return;
+    }
+    installCheck();
   }
 
   function installSheet(url) {
@@ -802,7 +950,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
 
   /* ---------------- service worker ---------------- */
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch((e) => { swError = 'Could not start: ' + (e && e.message || e); console.warn('Service worker failed', e); });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => { swError = 'Could not start: ' + (e && e.message || e); console.warn('Service worker failed', e); });
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && mode === 'connected') { reloaded = true; run(); } });
   }
@@ -823,6 +971,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     buildPage, previewLink, installSelf, installSheet, installCheck,
     canServe: () => swActive() && 'caches' in window,
     openInBrowser: (url) => { showView('browser'); browser.open(url, true); },
+    proxy, proxySheet,
     projectName: () => work.name,
   };
 

@@ -267,3 +267,12 @@ select{background:var(--raised);border:1px solid var(--line);border-radius:7px;p
 .checks li.warn::before{content:"!";color:var(--warn)}
 .checks span{color:var(--muted);overflow-wrap:anywhere}
 .checks code,.sheet-card code{font-family:var(--code);font-size:12px}
+
+/* suggestion bar for the basic editor */
+.sugbar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:6px;overflow-x:auto;padding:6px 8px;background:var(--raised);border-top:1px solid var(--line);z-index:5;scrollbar-width:none}
+.sugbar button{flex:none;display:flex;align-items:baseline;gap:6px;background:var(--raised-2);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-family:var(--code);font-size:13.5px;cursor:pointer}
+.sugbar button:first-child{border-color:var(--accent)}
+.sugbar small{font-family:var(--ui);font-size:10.5px;color:var(--muted)}
+
+.hself.ready{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.hself.ready svg{color:var(--accent-ink)}

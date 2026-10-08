@@ -11,6 +11,19 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="HTML Runner">
 <link rel="manifest" href="manifest.webmanifest">
+<script>
+/* Catch Chrome's one-time install signal before anything else loads */
+(function () {
+  var S = window.__hrInstall = { evt: null, installed: false, start: Date.now(), seen: 0, clicked: false };
+  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); S.evt = e; document.dispatchEvent(new Event('hr-installable')); });
+  addEventListener('appinstalled', function () { S.evt = null; S.installed = true; document.dispatchEvent(new Event('hr-installed')); });
+  addEventListener('pointerdown', function () { S.clicked = true; }, { capture: true, once: true });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { S.seen += (Date.now() - S.start) / 1000; } else { S.start = Date.now(); }
+  });
+})();
+</script>
+
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -86,7 +99,8 @@
         <button data-act="format">Format current file</button>
         <hr>
         <label class="menu-check"><input type="checkbox" id="autoRun"> Auto-run while typing</label>
-        <label class="menu-check"><input type="checkbox" id="aiComplete"> AI autocomplete (uses your AI model)</label>
+        <label class="menu-check"><input type="checkbox" id="smartSuggest" checked> Smart suggestions (works offline, no AI)</label>
+        <label class="menu-check"><input type="checkbox" id="aiComplete"> AI autocomplete (uses your AI model and its limits)</label>
         <label class="menu-check"><input type="checkbox" id="wrapLines"> Wrap long lines</label>
       </div>
       <div class="editor-host" id="editorHost">
@@ -200,10 +214,11 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://cdn.jsdelivr.net/npm/emmet-monaco-es@5.5.0/dist/emmet-monaco.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
-<script src="app.js"></script>
-<script src="ai.js"></script>
-<script src="home.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/emmet-monaco-es@5.5.0/dist/emmet-monaco.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js" defer></script>
+<script src="app.js" defer></script>
+<script src="complete.js" defer></script>
+<script src="ai.js" defer></script>
+<script src="home.js" defer></script>
 </body>
 </html>

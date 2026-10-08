@@ -19,6 +19,17 @@ Open the `https://<project>.web.app` address it prints, then on Home tap ⚙ →
 
 Any static host works too: Netlify Drop (drag the folder onto app.netlify.com/drop), GitHub Pages or Cloudflare Pages.
 
+## Fresh address (when Chrome insists it's already installed)
+
+Chrome can keep a record of an old install that covers your whole address, and then it never offers to install again. Putting HTML Runner on a new address gets around it every time:
+
+```
+firebase hosting:sites:create html-runner-app      # pick any free name
+firebase deploy --only hosting --site html-runner-app
+```
+
+Open `https://html-runner-app.web.app`, tap the page, wait about 30 seconds, then tap **Install HTML Runner** on Home. Add the new address to Firebase Authentication → Authorized domains if your code uses Firebase sign-in.
+
 ## Using Firebase in your own code
 
 1. Run in **Connected** mode (the default). Your page runs at `https://<your-host>/preview/index.html`, a real page on the same site.
@@ -42,7 +53,7 @@ HTML Runner is built for phones. The bar at the bottom switches between **Home**
 - Apps keep running in the background (a green dot shows which). Up to 5 stay open; the one used longest ago closes first.
 - The ⚙ button changes the wallpaper and hides suggestions.
 
-Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) stay blank as apps too. For those, long-press the icon → **Open in Chrome**.
+Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) stay blank as apps too. For those, long-press the icon → **Open in Chrome**, or turn on the page server (below).
 
 ## Built-in browser
 
@@ -53,6 +64,55 @@ Tabs, back and forward, bookmarks, and your own code preview. Many big sites (Go
 - Computer: opens a new tab.
 
 **Add** puts the site on your HTML Runner Home screen (see above).
+
+## Page server (load pages through your own server)
+
+`server/server.js` is a small server that fetches web pages for HTML Runner. With it on, the built-in browser and your Home screen website apps get every page, picture, script and request from **one address: your server**, instead of straight from each site.
+
+What that changes:
+
+- **Chrome extensions such as ad blockers** mostly block by site address (for example anything from `ads.example.com`). Through the page server, every request goes to your server and the site's name is encoded in the address, so those rules no longer match.
+- **Sites that refuse to be shown inside other apps** (the ones that stay blank) load, because the server removes the "don't show me inside other apps" instruction.
+- Each site's cookies are kept separately on your server, so logins on simple sites work.
+
+### Run it on your computer
+
+Needs [Node.js](https://nodejs.org) 18 or newer. Nothing to install.
+
+```
+node server/server.js
+```
+
+It starts two things:
+
+- the page server at `http://localhost:8787`
+- HTML Runner itself at `http://localhost:8080`, already set up to use the page server. Open that address and it just works.
+
+To use it from your phone on the same Wi-Fi, open `http://<your computer's IP>:8080` on the phone.
+
+### Put it online
+
+Any host that runs Node works (Render, Railway, Fly.io, a VPS). The start command is `node server/server.js` and the host sets `PORT` itself. Then:
+
+1. **Set `PROXY_KEY`** to a password of your choosing. Without it anyone who finds the address can use your server. With it, the address becomes `https://your-server.example.com/k/<your key>`.
+2. The server must be on **https** when HTML Runner is (Firebase is always https). Chrome won't show http pages inside an https app. Hosts like Render give you https automatically.
+3. In HTML Runner: **Home → ⚙ → Page server**, tick **Load web pages through my page server**, paste the address with the key, **Test**, then **Save**. The Browser's bottom bar shows when it's on.
+
+Settings (environment variables, all optional):
+
+| Setting | What it does |
+|---|---|
+| `PORT` | Port for the page server (default 8787) |
+| `PROXY_KEY` | Password. Addresses then start with `/k/<key>` |
+| `APP_PORT` | Port for serving HTML Runner itself (default 8080, `0` turns it off) |
+| `ALLOW_LOCAL` | `1` lets it open addresses on your own network (192.168.x.x, localhost). Off by default so an online server can't be pointed at private machines |
+
+### Limits worth knowing
+
+- Ad blockers also hide parts of pages by what they look like (not by address). That still works inside Chrome, so some boxes may stay hidden.
+- Sites see your server's internet address, not yours. Google, YouTube, banks and big social sites often notice this and show a check page or refuse to sign in. For those, **Open in Chrome** is still the way.
+- Pages are rewritten on the way through. Most sites work; very script-heavy ones can have parts that don't.
+- Service workers (offline modes of other sites) are off inside the page server.
 
 ## AI providers
 
@@ -68,7 +128,18 @@ Tabs, back and forward, bookmarks, and your own code preview. Many big sites (Go
 
 Each provider's model list is loaded live. With **switch when a provider runs out** turned on, a rate-limit or quota error moves the chat to the next provider you've set up. Keys are stored only in your browser.
 
-**AI autocomplete** (⋯ menu) shows grey suggestions while you type. Press Tab to accept. It uses the model selected in the AI section and counts against that provider's limits.
+## Smart suggestions (no AI, works offline)
+
+Suggestions run entirely on your phone, so they never hit a limit and work without internet. They are on by default (Code → ⋯ → Smart suggestions).
+
+- Knows HTML tags and attributes, CSS properties and values, and JavaScript keywords, browser APIs and methods.
+- Reads your own files: ids, classes, CSS variables and the names in your script come up where they fit, for example `getElementById('` lists your ids and `class="` lists your classes.
+- Typing `but` in HTML offers a full `<button></button>`; snippets like `log`, `ael`, `fn`, `qs`, `fetchjson` and CSS `center` expand into code.
+- Fixes typos: `buton` → button, `docuemnt` → document.
+- Learns what you pick and ranks it higher next time.
+- The list stays open while you type and comes back when you delete a letter.
+
+**AI autocomplete** (⋯ menu, off by default) shows grey suggestions while you type. Press Tab to accept. It uses the model selected in the AI section and counts against that provider's limits.
 
 ## Shortcuts
 

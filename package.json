@@ -1,0 +1,11 @@
+{
+  "name": "html-runner-page-server",
+  "version": "1.0.0",
+  "description": "Loads pages for HTML Runner's built-in browser and Home screen apps",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,8 +1,9 @@
 /* HTML Runner service worker
    - Serves your code preview at ./preview/ as a real page on this site, so Firebase sign-in, fetch and storage behave normally.
+   - Serves your own code installed on the Home screen at ./apps/<id>/.
    - Keeps the app and the editor files cached so HTML Runner opens offline. */
-const VERSION = 'hr-v1';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'ai.js', 'manifest.webmanifest',
+const VERSION = 'hr-v2';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'ai.js', 'home.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -12,7 +13,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    const keep = [VERSION, VERSION + '-cdn', 'hr-preview'];
+    const keep = [VERSION, VERSION + '-cdn', 'hr-preview', 'hr-apps'];
     for (const k of await caches.keys()) if (!keep.includes(k)) await caches.delete(k);
     await self.clients.claim();
   })());
@@ -37,6 +38,18 @@ self.addEventListener('fetch', (e) => {
           { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
       return fetch(req).catch(() => new Response('Not found: ' + path, { status: 404 }));
+    })());
+    return;
+  }
+
+  // 1b. Your own code saved as Home screen apps (apps/<id>/index.html)
+  const appsBase = new URL('apps/', self.registration.scope).href;
+  if (url.href.startsWith(appsBase)) {
+    e.respondWith((async () => {
+      const cache = await caches.open('hr-apps');
+      const hit = await cache.match(url.href.split(/[?#]/)[0], { ignoreSearch: true });
+      return hit || new Response('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:24px">Open this app from the HTML Runner Home screen.</body>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     })());
     return;
   }

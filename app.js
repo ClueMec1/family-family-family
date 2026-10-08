@@ -10,7 +10,7 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const isPhone = () => matchMedia('(max-width:820px)').matches;
+  const isPhone = () => true; // built for phones
 
   /* ---------------- templates ---------------- */
   const TEMPLATES = {
@@ -228,11 +228,18 @@ if (firebaseConfig.apiKey.startsWith('PASTE')) {
   function showView(name) {
     document.querySelectorAll('.view').forEach((v) => v.toggleAttribute('data-active', v.id === 'view-' + name));
     document.querySelectorAll('#views button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.view === name)));
+    if (!document.querySelector('.view[data-active]')) return showView('home');
     store.set('hr:view', name);
     if (name === 'code' && editor.layout) editor.layout();
     if (name === 'browser') browser.ensureTab();
+    viewHooks.forEach((fn) => fn(name));
   }
-  $('views').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) showView(b.dataset.view); });
+  const viewHooks = [];
+  $('views').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.view === 'home' && window.HR && HR.goHome) HR.goHome();
+    showView(b.dataset.view);
+  });
 
   function showPane(p) {
     $('split').dataset.pane = p;
@@ -572,6 +579,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     else if (act === 'open') openProjects();
     else if (act === 'upload') $('fileInput').click();
     else if (act === 'download') download();
+    else if (act === 'home') { window.HR.addCodeToHome && HR.addCodeToHome(); }
     else if (act === 'format') { if (ed) ed.getAction('editor.action.formatDocument').run(); else toast('Formatting needs the full editor'); }
   });
 
@@ -700,9 +708,13 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     const currentUrl = () => (active && active.url) || '';
     $('bChrome').onclick = () => { const u = currentUrl(); if (!u) return toast('Open a page first'); openInChrome(u); };
     $('bStatusChrome').onclick = $('bChrome').onclick;
-    $('bInstall').onclick = () => installSheet(currentUrl());
+    $('bInstall').onclick = () => {
+      if (!active || !active.url) return toast('Open a web page first, then tap Add');
+      window.HR.addToHome && HR.addToHome(active.url, active.title, active.el);
+    };
 
-    return { open: (url, fresh) => { ensureTab(); const t = fresh ? newTab(url) : active; if (!fresh) navigate(t, url); }, ensureTab };
+    return { open: (url, fresh) => { ensureTab(); const t = fresh ? newTab(url) : active; if (!fresh) navigate(t, url); }, ensureTab,
+      current: () => (active ? { url: active.url, title: active.title, frame: active.el } : null) };
   })();
 
   /* ---------------- Open in Chrome + installing ---------------- */
@@ -778,10 +790,15 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     },
     whenEditor: editor.whenReady,
     showCode: (k) => { showView('code'); showPane('editor'); if (k) switchFile(k); },
+    onView: (fn) => viewHooks.push(fn),
+    buildPage, previewLink, installSelf, installSheet,
+    canServe: () => swActive() && 'caches' in window,
+    openInBrowser: (url) => { showView('browser'); browser.open(url, true); },
+    projectName: () => work.name,
   };
 
   /* ---------------- start ---------------- */
   initMonaco();
-  showView(new URLSearchParams(location.search).get('view') || store.get('hr:view', 'code'));
+  showView(new URLSearchParams(location.search).get('view') || 'home');
   run();
 })();

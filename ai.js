@@ -131,7 +131,7 @@
   }
   function pickModel(id) {
     S.models[S.provider] = id; saveS(); renderModels();
-    if (matchMedia('(max-width:820px)').matches) $('aiSide').classList.remove('open');
+    $('aiSide').classList.remove('open');
   }
   function updateHeader() {
     const p = P();

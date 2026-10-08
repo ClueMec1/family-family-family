@@ -15,7 +15,7 @@ firebase init hosting     # pick your project, public directory ".", say NO to o
 firebase deploy
 ```
 
-Open the `https://<project>.web.app` address it prints, then press **Install app** at the top.
+Open the `https://<project>.web.app` address it prints, then on Home tap ⚙ → **Install HTML Runner** (or the install banner).
 
 Any static host works too: Netlify Drop (drag the folder onto app.netlify.com/drop), GitHub Pages or Cloudflare Pages.
 
@@ -30,6 +30,20 @@ Any static host works too: Netlify Drop (drag the folder onto app.netlify.com/dr
 - **Connected** runs your code as a normal page on this site: fetch, Firebase, logins, cookies, storage and service workers all behave normally. It shares this app's storage, so only run code you trust.
 - **Isolated** runs the code in a locked sandbox with no access to the app's storage.
 
+## Home screen and apps
+
+HTML Runner is built for phones. The bar at the bottom switches between **Home**, **Browser**, **Code** and **AI**.
+
+**Home** works like a phone's home screen: clock, a search bar (the **AI** button sends what you typed to the AI chat), and your apps.
+
+- **Add a website as an app:** open it in Browser and tap **Add**. HTML Runner reads the site's app name, icon and colour when the site allows it, and you can rename it or pick a colour. It then opens full screen from Home with its own title bar, like an installed app. No Chrome needed.
+- **Add your own code as an app:** Code → ⋯ → **Add to Home screen**, or tap **My code** under Suggested apps. It saves a copy; long-press the icon and choose **Update with my current code** after you change it. On a hosted copy it runs at `/apps/<id>/` on your site, so Firebase and logins work.
+- **Long-press an icon** to rename it, change its colour, move it, close it, open it in Browser or Chrome, or remove it.
+- Apps keep running in the background (a green dot shows which). Up to 5 stay open; the one used longest ago closes first.
+- The ⚙ button changes the wallpaper and hides suggestions.
+
+Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) stay blank as apps too. For those, long-press the icon → **Open in Chrome**.
+
 ## Built-in browser
 
 Tabs, back and forward, bookmarks, and your own code preview. Many big sites (Google, YouTube, banks, social networks) refuse to be shown inside another app and will stay blank. **Open in Chrome** sends the page to Chrome:
@@ -38,7 +52,7 @@ Tabs, back and forward, bookmarks, and your own code preview. Many big sites (Go
 - iPhone and iPad: opens Chrome if it is installed.
 - Computer: opens a new tab.
 
-**Install** explains how to install the site from Chrome.
+**Add** puts the site on your HTML Runner Home screen (see above).
 
 ## AI providers
 

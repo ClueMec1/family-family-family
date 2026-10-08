@@ -746,7 +746,8 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
       title: 'Install HTML Runner',
       body: isIOS
         ? '<ol><li>Open this page in Safari.</li><li>Tap the Share button.</li><li>Choose <b>Add to Home Screen</b>.</li></ol>'
-        : '<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol><p>If you don\'t see it, make sure HTML Runner is opened from its website address (https), not from a file.</p>',
+        : '<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol><p>If you don\'t see it, make sure HTML Runner is opened from its website address (https), not from a file.</p>' +
+          '<p>Chrome says it\'s already installed but it won\'t open? Chrome is remembering an old copy. In Chrome tap ⋮ → Settings → Site settings → All sites, find this site, tap <b>Delete & reset</b>, then reload and install again.</p>',
       actions: [{ label: 'OK', primary: true }],
     });
   }

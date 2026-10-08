@@ -27,7 +27,22 @@
   ];
   const MAX_RUNNING = 5;
 
-  let apps = store.get('hr:apps', []);
+  // Clean up entries left by older versions of HTML Runner, which used the same storage name
+  function cleanApps(list) {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    return list.filter((a) => {
+      if (!a || typeof a !== 'object' || typeof a.id !== 'string' || !a.id) return false;
+      if (a.kind === 'code') return true;
+      if (typeof a.url !== 'string' || !/^https?:/i.test(a.url)) return false;
+      const k = sameUrl(a.url); if (seen.has(k)) return false; seen.add(k);
+      a.kind = 'web'; a.name = String(a.name || host(a.url)); return true;
+    });
+  }
+  function sameUrl(u) { try { const x = new URL(u); return (x.origin + x.pathname).replace(/\/+$/, '') + x.search; } catch (e) { return u; } }
+  const rawApps = store.get('hr:apps', []);
+  let apps = cleanApps(rawApps);
+  if (!Array.isArray(rawApps) || apps.length !== rawApps.length) store.set('hr:apps', apps);
   let prefs = store.get('hr:homeprefs', { wall: 'ember', suggest: true });
   const running = new Map(); // id -> { frame, last }
   let openId = null;
@@ -95,7 +110,7 @@
     });
     // suggestions
     const row = $('suggestRow'); row.innerHTML = '';
-    const left = SUGGEST.filter((s) => !apps.some((a) => a.url === s.url));
+    const left = SUGGEST.filter((s) => !apps.some((a) => a.kind === 'web' && sameUrl(a.url) === sameUrl(s.url)));
     const codeAdded = apps.some((a) => a.kind === 'code');
     $('suggest').hidden = !prefs.suggest || (!left.length && codeAdded);
     if (!codeAdded) row.append(suggestChip({ name: 'My code', kind: 'code', color: '#ffb547' }, () => addCodeToHome()));
@@ -349,8 +364,8 @@
     if (!url) return HR.toast('Open a web page first, then tap Add');
     const isPreview = url.startsWith('blob:') || url.includes('/preview/index.html');
     if (isPreview) return addCodeToHome();
-    if (apps.some((a) => a.url === url)) {
-      const a = apps.find((x) => x.url === url);
+    const a = apps.find((x) => x.kind === 'web' && sameUrl(x.url) === sameUrl(url));
+    if (a) {
       return HR.sheet({ title: 'Already on Home', body: `<p>“${esc(a.name)}” is already on your Home screen.</p>`, actions: [
         { label: 'Close' }, { label: 'Open it', primary: true, onClick: () => openApp(a.id) }] });
     }

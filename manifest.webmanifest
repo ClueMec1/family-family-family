@@ -2,7 +2,7 @@
   "name": "HTML Runner",
   "short_name": "HTML Runner",
   "description": "Write HTML, CSS and JavaScript with code suggestions, run it live, browse the web and get AI help.",
-  "id": "./",
+  "id": "./?app=html-runner-2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

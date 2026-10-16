@@ -41,29 +41,49 @@ Open `https://html-runner-app.web.app`, tap the page, wait about 30 seconds, the
 - **Connected** runs your code as a normal page on this site: fetch, Firebase, logins, cookies, storage and service workers all behave normally. It shares this app's storage, so only run code you trust.
 - **Isolated** runs the code in a locked sandbox with no access to the app's storage.
 
-## Home screen and apps
+## The phone
 
-HTML Runner is built for phones. The bar at the bottom switches between **Home**, **Browser**, **Code** and **AI**.
+HTML Runner works like an Android phone.
 
-**Home** works like a phone's home screen: clock, a search bar (the **AI** button sends what you typed to the AI chat), and your apps.
+- **Home screen:** a clock, your apps on swipeable pages, a dock with **Browser**, **Code**, **AI** and **Settings**, and a search bar (the ✦ button sends what you typed to the AI).
+- **All apps:** swipe up on the Home screen. Type to find an app, or press Enter to search the web.
+- **Navigation bar:** ◁ Back, ○ Home, ▢ Recent apps. Prefer a gesture bar? Settings → System → Navigation. With the gesture bar: tap = Home, swipe up = recent apps, swipe sideways = previous app.
+- **Recent apps:** every open app as a live card. Tap one to switch, swipe it up (or tap ✕) to close it, or **Clear all**.
+- **Your phone's own Back button** works everywhere: it steps back in the browser, closes menus and dialogs, and returns to Home.
+- **Status bar** (time, Wi-Fi, battery): shown automatically when your phone's own status bar is hidden, for example in a full-screen APK. Change it in Settings → System.
 
-- **Add a website as an app:** open it in Browser and tap **Add**. HTML Runner reads the site's app name, icon and colour when the site allows it, and you can rename it or pick a colour. It then opens full screen from Home with its own title bar, like an installed app. No Chrome needed.
-- **Add your own code as an app:** Code → ⋯ → **Add to Home screen**, or tap **My code** under Suggested apps. It saves a copy; long-press the icon and choose **Update with my current code** after you change it. On a hosted copy it runs at `/apps/<id>/` on your site, so Firebase and logins work.
-- **Long-press an icon** to rename it, change its colour, move it, close it, open it in Browser or Chrome, or remove it.
-- Apps keep running in the background (a green dot shows which). Up to 5 stay open; the one used longest ago closes first.
-- The ⚙ button changes the wallpaper and hides suggestions.
+### Apps on the Home screen
 
-Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) stay blank as apps too. For those, long-press the icon → **Open in Chrome**, or turn on the page server (below).
+- **Add a website:** open it in Browser, tap ⋮ → **Add to Home screen**. HTML Runner reads the site's app name, icon and colour when the site allows it.
+- **Add your own code:** Code → ⋯ → **Add to Home screen**.
+- Apps open full screen with a splash screen and their own colour in the status bar, like installed apps. Up to 5 stay open in the background.
+- **Long-press an icon** to edit it (name, colour, position), open it in Browser or Chrome, update a code app, close it, or remove it.
 
-## Built-in browser
+### Settings
 
-Tabs, back and forward, bookmarks, and your own code preview. Many big sites (Google, YouTube, banks, social networks) refuse to be shown inside another app and will stay blank. **Open in Chrome** sends the page to Chrome:
+Wallpaper (8 to choose from), icon shape, apps per row, app names on or off, the browser's search engine and home page, clearing history, bookmarks, the page server, navigation style, status bar and installing.
 
-- Android: opens Chrome directly.
-- iPhone and iPad: opens Chrome if it is installed.
-- Computer: opens a new tab.
+## Browser
 
-**Add** puts the site on your HTML Runner Home screen (see above).
+Works like Chrome on Android:
+
+- **Address bar:** shows the site you're on. Type an address (`example.com` gets `https://` added), or anything else to search DuckDuckGo.
+- **⋮ menu:** Forward, Bookmark ★, Refresh, Open in Chrome, New tab, Bookmarks, History, Add to Home screen, Open full screen, Use as home page, Page server, and Browser settings.
+- **Tabs:** the square with a number shows your tabs as cards.
+- **Bookmarks and History** are kept on your phone. History is grouped by day, and you can remove single pages or clear it all.
+- **New tab page:** a search box, your bookmarks as shortcuts, your code preview and recently visited sites.
+- **Back** follows links you tapped inside pages too, then the pages you typed, then returns to Home.
+- A blue bar under the address shows when a page is loading.
+
+Many big sites (Google, YouTube, banks, social networks) refuse to be shown inside another app; see below.
+
+## YouTube and sites that say "blocked by response"
+
+Some sites (YouTube, Google, Instagram, TikTok, X, banks…) tell browsers not to show their pages inside other apps. Chrome and Android then show **"blocked by response"**. It isn't about your IP address.
+
+- **YouTube videos play in HTML Runner.** Open or paste any video link (youtube.com/watch…, youtu.be/…, Shorts, live) and it plays in YouTube's official player, which is made for showing inside apps. This works in the APK too, as long as the APK loads HTML Runner from its web address.
+- **Other pages on those sites** show a screen with **Open full screen**, which loads the site in the whole HTML Runner window. Use the phone's Back button to come back. **Open in Chrome** sends it to Chrome.
+- YouTube never goes through the page server. YouTube does check internet addresses, and it treats server addresses as bots ("Sign in to confirm you're not a bot").
 
 ## Page server (load pages through your own server)
 

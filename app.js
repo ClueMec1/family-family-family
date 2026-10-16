@@ -193,7 +193,8 @@ if (firebaseConfig.apiKey.startsWith('PASTE')) {
     const b = $('sheetBody'); b.innerHTML = '';
     if (typeof body === 'string') b.innerHTML = body; else if (body) b.append(body);
     const a = $('sheetActions'); a.innerHTML = '';
-    const close = () => { s.hidden = true; document.removeEventListener('keydown', onKey); };
+    let un = null;
+    const close = () => { s.hidden = true; document.removeEventListener('keydown', onKey); if (un) { un(); un = null; } };
     const onKey = (e) => { if (e.key === 'Escape') close(); };
     actions.forEach((act) => {
       const btn = document.createElement('button');
@@ -204,6 +205,8 @@ if (firebaseConfig.apiKey.startsWith('PASTE')) {
       a.append(btn);
     });
     s.hidden = false;
+    if (sheet.un) sheet.un();
+    un = sheet.un = window.PHONE ? PHONE.overlay(() => { un = null; close(); }) : null; // the phone's Back closes it
     document.addEventListener('keydown', onKey);
     s.onclick = (e) => { if (e.target === s) close(); };
     setTimeout(() => { const f = b.querySelector('input') || a.querySelector('.run'); f && f.focus(); }, 30);
@@ -224,22 +227,17 @@ if (firebaseConfig.apiKey.startsWith('PASTE')) {
     });
   }
 
-  /* ---------------- views ---------------- */
-  function showView(name) {
-    document.querySelectorAll('.view').forEach((v) => v.toggleAttribute('data-active', v.id === 'view-' + name));
-    document.querySelectorAll('#views button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.view === name)));
-    if (!document.querySelector('.view[data-active]')) return showView('home');
+  /* ---------------- views ----------------
+     Each part of HTML Runner (Browser, Code, AI, Settings) is an app window on the phone shell (phone.js). */
+  function showView(name, from) {
+    if (name === 'home') { PHONE.home(); return; }
+    if (!$('view-' + name)) return PHONE.home();
     store.set('hr:view', name);
-    if (name === 'code' && editor.layout) editor.layout();
-    if (name === 'browser') browser.ensureTab();
+    PHONE.show(name, from);
+    if (name === 'code' && editor.layout) setTimeout(() => editor.layout(), 320);
     viewHooks.forEach((fn) => fn(name));
   }
   const viewHooks = [];
-  $('views').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.view === 'home' && window.HR && HR.goHome) HR.goHome();
-    showView(b.dataset.view);
-  });
 
   function showPane(p) {
     $('split').dataset.pane = p;
@@ -492,7 +490,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     return URL.createObjectURL(blob);
   }
   $('popOut').onclick = async () => { const u = await previewLink(); window.open(u, '_blank'); };
-  $('toBrowser').onclick = async () => { const u = await previewLink(); showView('browser'); browser.open(u, true); };
+  $('toBrowser').onclick = async () => { const u = await previewLink(); HR.openInBrowser(u); };
   $('runBtn').onclick = runAndShow;
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !(ed && ed.hasTextFocus())) { e.preventDefault(); runAndShow(); }
@@ -663,166 +661,88 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     ] });
   }
 
-  /* ---------------- built-in browser ---------------- */
-  const browser = (function () {
-    let tabs = [], active = null, seq = 0;
-    const DEFAULT_MARKS = [
-      { title: 'Wikipedia', url: 'https://en.m.wikipedia.org/' },
-      { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/' },
-      { title: 'Can I use', url: 'https://caniuse.com/' },
-    ];
-    let marks = store.get('hr:marks', DEFAULT_MARKS);
-    const saveMarks = () => store.set('hr:marks', marks);
-
-    function toUrl(input) {
-      const s = input.trim();
-      if (!s) return '';
-      if (/^(https?|blob|data):/i.test(s)) return s;
-      if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/|$)/i.test(s)) return 'http://' + s;
-      if (/^[^\s]+\.[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(s)) return 'https://' + s;
-      return 'https://html.duckduckgo.com/html/?q=' + encodeURIComponent(s);
+  /* ---------------- sites that refuse to be shown inside other apps ----------------
+     These send a "don't show me inside another app" instruction, and Chrome / Android then shows
+     "blocked by response" (ERR_BLOCKED_BY_RESPONSE). It has nothing to do with your IP address.
+     YouTube videos have an official player made for showing inside other apps, so videos play through that.
+     Everything else on these sites gets a screen with ways to open it full screen. */
+  const NO_FRAME = ['youtube.com', 'google.com', 'gmail.com', 'facebook.com', 'instagram.com', 'threads.net', 'x.com', 'twitter.com',
+    'tiktok.com', 'linkedin.com', 'netflix.com', 'amazon.com', 'paypal.com', 'github.com', 'twitch.tv', 'discord.com', 'whatsapp.com',
+    'spotify.com', 'chatgpt.com', 'openai.com', 'microsoft.com', 'live.com', 'office.com', 'apple.com', 'icloud.com', 'pinterest.com',
+    'snapchat.com', 'messenger.com', 'disneyplus.com', 'hulu.com', 'primevideo.com', 'ebay.com', 'claude.ai', 'roblox.com', 'chase.com',
+    'bankofamerica.com', 'wellsfargo.com'];
+  const hostOf = (url) => { try { return new URL(url).hostname.toLowerCase().replace(/^www\.|^m\./, ''); } catch (e) { return ''; } };
+  const onSite = (h, d) => h === d || h.endsWith('.' + d);
+  function youtubeVideo(url) {
+    let u; try { u = new URL(url); } catch (e) { return null; }
+    const h = u.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
+    let id = null;
+    if (h === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+    else if (h === 'youtube.com' || h === 'youtube-nocookie.com') {
+      if (u.pathname === '/watch') id = u.searchParams.get('v');
+      else { const m = u.pathname.match(/^\/(shorts|live|embed|v)\/([\w-]{6,})/); if (m) id = m[2]; }
     }
-    function label(url) {
-      if (!url) return 'New tab';
-      if (url.startsWith('blob:') || url.includes('/preview/index.html')) return 'Your preview';
-      try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; }
+    if (!id || !/^[\w-]{6,20}$/.test(id)) return null;
+    const p = new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', modestbranding: '1' });
+    const t = u.searchParams.get('t') || u.searchParams.get('start');
+    if (t) { const m = String(t).match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/); if (m) p.set('start', String((+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0))); }
+    if (u.searchParams.get('list')) p.set('list', u.searchParams.get('list'));
+    return 'https://www.youtube-nocookie.com/embed/' + id + '?' + p;
+  }
+  /* What to do with an address: { embed } plays it in an official player, { blocked } shows the
+     "open full screen" screen, null loads it normally (through the page server when that's on). */
+  function siteRule(url) {
+    const yt = youtubeVideo(url);
+    if (yt) return { embed: yt, title: 'YouTube' };
+    const h = hostOf(url);
+    if (!h) return null;
+    // YouTube checks server addresses and stops them as bots, so it never goes through the page server
+    if (onSite(h, 'youtube.com') || onSite(h, 'youtu.be')) return { blocked: true, name: 'YouTube', youtube: true };
+    const d = NO_FRAME.find((x) => onSite(h, x));
+    if (d && !proxy.active()) return { blocked: true, name: d.replace(/\.\w+$/, '').replace(/^./, (c) => c.toUpperCase()) };
+    return null;
+  }
+  function openFullScreen(url) {
+    // Loads the site in the whole app window. In an app made from HTML Runner, the phone's Back button comes back here.
+    toast('Opening ' + hostOf(url) + '… use Back to return');
+    setTimeout(() => { location.href = url; }, 400);
+  }
+  function blockedCard(url, rule, opts = {}) {
+    const div = document.createElement('div'); div.className = 'blocked';
+    div.innerHTML = `<div class="blocked-in">
+      <div class="bk-badge"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9h16M9 13l6 4M15 13l-6 4"/></svg></div>
+      <h2></h2>
+      <p class="why"></p>
+      <form class="bk-video" hidden><label class="field"><span>Play a YouTube video here</span>
+        <input type="url" placeholder="Paste a video link (youtube.com/watch… or youtu.be/…)" spellcheck="false" autocapitalize="off"></label>
+        <button class="btn run" type="submit">Play video</button></form>
+      <div class="bk-actions">
+        <button type="button" class="btn run big" data-a="full">Open full screen</button>
+        <button type="button" class="btn big" data-a="chrome">Open in Chrome</button>
+        <button type="button" class="btn ghost big" data-a="try" hidden>Try loading it here anyway</button>
+      </div>
+      <p class="hint">“Open full screen” loads the site in the whole window. Use your phone’s Back button to come back.</p>
+    </div>`;
+    div.querySelector('h2').textContent = rule.name + ' doesn’t open inside apps';
+    div.querySelector('.why').textContent = rule.youtube
+      ? 'YouTube sends a security header (X-Frame-Options) that stops its pages being shown inside other apps. That’s the “blocked by response” message, not your internet address. Videos still play here through YouTube’s own player.'
+      : rule.name + ' sends a security header (X-Frame-Options) that stops its pages being shown inside other apps, so it would stay blank or say “blocked by response”. Open it full screen instead' + (proxy.get().url ? '.' : ', or turn on your page server in Settings.');
+    div.querySelector('[data-a="full"]').onclick = () => openFullScreen(url);
+    div.querySelector('[data-a="chrome"]').onclick = () => openInChrome(url);
+    const tryBtn = div.querySelector('[data-a="try"]');
+    if (opts.onTry) { tryBtn.hidden = false; tryBtn.onclick = opts.onTry; }
+    const vf = div.querySelector('.bk-video');
+    if (rule.youtube && opts.onVideo) {
+      vf.hidden = false;
+      vf.onsubmit = (e) => {
+        e.preventDefault();
+        const v = vf.querySelector('input').value.trim();
+        if (!youtubeVideo(v)) return toast('That isn’t a YouTube video link');
+        opts.onVideo(v);
+      };
     }
-
-    function renderTabs() {
-      const strip = $('btabs'); strip.innerHTML = '';
-      tabs.forEach((t) => {
-        const el = document.createElement('div');
-        el.className = 'btab'; el.setAttribute('role', 'tab'); el.setAttribute('aria-selected', String(t === active)); el.tabIndex = 0;
-        el.innerHTML = `<span></span><button class="x" title="Close tab" type="button"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
-        el.querySelector('span').textContent = t.title || label(t.url);
-        el.onclick = (e) => { if (e.target.closest('.x')) close(t); else select(t); };
-        el.onkeydown = (e) => { if (e.key === 'Enter') select(t); };
-        strip.append(el);
-      });
-    }
-    function startPage(t) {
-      const div = document.createElement('div'); div.className = 'start';
-      div.innerHTML = `<div class="start-inner">
-        <h2>Where to?</h2>
-        <p>Type a web address or a search above. Sites that refuse to be shown inside other apps (Google, YouTube, most banks and social sites) will stay blank here. Use Open in Chrome for those, or load pages through your own page server (link at the bottom).</p>
-        <div class="marks"></div>
-        <p>To install a website as an app, open it and press <b>Install</b>.</p></div>`;
-      const grid = div.querySelector('.marks');
-      const prev = document.createElement('button'); prev.className = 'mark'; prev.type = 'button';
-      prev.innerHTML = '<i class="fav">&lt;/&gt;</i><span>Your code preview</span>';
-      prev.onclick = async () => { const u = await previewLink(); navigate(t, u); };
-      grid.append(prev);
-      marks.forEach((m, i) => {
-        const b = document.createElement('div'); b.className = 'mark'; b.tabIndex = 0; b.setAttribute('role', 'button');
-        b.innerHTML = `<i class="fav"></i><span></span><button class="rm" type="button" title="Remove bookmark">✕</button>`;
-        b.querySelector('.fav').textContent = (m.title || '?')[0].toUpperCase();
-        b.querySelector('span').textContent = m.title;
-        b.onclick = (e) => { if (e.target.closest('.rm')) { marks.splice(i, 1); saveMarks(); const fresh = startPage(t); t.el.replaceWith(fresh); t.el = fresh; show(t); return; } navigate(t, m.url); };
-        b.onkeydown = (e) => { if (e.key === 'Enter') navigate(t, m.url); };
-        grid.append(b);
-      });
-      return div;
-    }
-    function newTab(url, focus = true) {
-      const t = { id: ++seq, url: '', title: '', hist: [], idx: -1, el: null };
-      t.el = startPage(t); $('bstage').append(t.el);
-      tabs.push(t);
-      if (url) navigate(t, url);
-      if (focus) select(t); else { t.el.hidden = true; renderTabs(); }
-      saveTabs();
-      return t;
-    }
-    function load(t, url) {
-      t.url = url; t.title = ''; t.fresh = true;
-      const f = document.createElement('iframe');
-      f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; web-share; payment');
-      f.setAttribute('allowfullscreen', '');
-      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      f.src = proxy.wrap(url);
-      f.addEventListener('load', () => {
-        try { const d = f.contentDocument; if (d && d.title) { t.title = d.title; renderTabs(); } } catch (e) {}
-      });
-      t.el.replaceWith(f); t.el = f;
-      show(t); renderTabs(); saveTabs();
-    }
-    function navigate(t, input) {
-      const url = toUrl(input); if (!url) return;
-      t.hist = t.hist.slice(0, t.idx + 1); t.hist.push(url); t.idx = t.hist.length - 1;
-      load(t, url);
-    }
-    function show(t) {
-      tabs.forEach((x) => (x.el.hidden = x !== active));
-      if (t === active) { $('addrInput').value = t.url && !t.url.startsWith('blob:') ? t.url : (t.url ? 'Your preview' : ''); }
-      $('bStar').classList.toggle('on', !!(t.url && marks.some((m) => m.url === t.url)));
-      $('bBack').disabled = !(active && active.idx > 0);
-      $('bFwd').disabled = !(active && active.idx < active.hist.length - 1);
-    }
-    function select(t) { active = t; show(t); renderTabs(); }
-
-    // Pages from the page server say which page they're on, so the address bar, title and Back keep up.
-    window.addEventListener('message', (e) => {
-      const m = e.data;
-      if (!m || m.__hrProxy !== 1 || typeof m.url !== 'string') return;
-      const t = tabs.find((x) => x.el && x.el.contentWindow === e.source);
-      if (!t) return;
-      if (m.title) t.title = String(m.title).slice(0, 200);
-      if (/^https?:/.test(m.url) && m.url !== t.url) {
-        if (t.fresh) t.hist[t.idx] = m.url;  // the page we asked for moved (a redirect): replace it
-        else { t.hist = t.hist.slice(0, t.idx + 1); t.hist.push(m.url); t.idx = t.hist.length - 1; }
-        t.url = m.url; saveTabs();
-      }
-      t.fresh = false;
-      if (t === active) show(t);
-      renderTabs();
-    });
-    function statusBar() {
-      const on = proxy.active();
-      $('bstatus').innerHTML = on
-        ? `Loading pages through your page server (<b></b>). <button class="link" id="bProxy">Change</button>`
-        : `Page stays blank? That site blocks being shown inside other apps. <button class="link" id="bStatusChrome">Open it in Chrome</button> or <button class="link" id="bProxy">use your page server</button>`;
-      if (on) $('bstatus').querySelector('b').textContent = proxy.host();
-      if ($('bStatusChrome')) $('bStatusChrome').onclick = () => $('bChrome').onclick();
-      $('bProxy').onclick = proxySheet;
-    }
-    proxy.onChange(() => { statusBar(); tabs.forEach((t) => { if (t.url && t.el.tagName === 'IFRAME') load(t, t.url); }); });
-    function close(t) {
-      const i = tabs.indexOf(t); tabs.splice(i, 1); t.el.remove();
-      if (!tabs.length) newTab();
-      else if (t === active) select(tabs[Math.max(0, i - 1)]);
-      else renderTabs();
-      saveTabs();
-    }
-    function saveTabs() { store.set('hr:tabs', tabs.filter((t) => t.url && !t.url.startsWith('blob:')).map((t) => t.url)); }
-    function ensureTab() {
-      if (tabs.length) return;
-      const saved = store.get('hr:tabs', []);
-      if (saved.length) { saved.forEach((u, i) => newTab(u, i === saved.length - 1)); } else newTab();
-    }
-
-    $('newTab').onclick = () => { newTab(); $('addrInput').focus(); };
-    $('addrForm').onsubmit = (e) => { e.preventDefault(); if (!active) newTab(); navigate(active, $('addrInput').value); $('addrInput').blur(); };
-    $('addrInput').onfocus = function () { this.select(); };
-    $('bBack').onclick = () => { if (active && active.idx > 0) { active.idx--; load(active, active.hist[active.idx]); } };
-    $('bFwd').onclick = () => { if (active && active.idx < active.hist.length - 1) { active.idx++; load(active, active.hist[active.idx]); } };
-    $('bReload').onclick = () => { if (active && active.url) load(active, active.url); };
-    $('bStar').onclick = async () => {
-      if (!active || !active.url || active.url.startsWith('blob:')) return toast('Open a web page first');
-      const i = marks.findIndex((m) => m.url === active.url);
-      if (i >= 0) { marks.splice(i, 1); saveMarks(); toast('Bookmark removed'); }
-      else { const n = await ask('Add bookmark', 'Name', active.title || label(active.url)); if (!n) return; marks.push({ title: n, url: active.url }); saveMarks(); toast('Bookmarked'); }
-      show(active);
-    };
-    const currentUrl = () => (active && active.url) || '';
-    $('bChrome').onclick = () => { const u = currentUrl(); if (!u) return toast('Open a page first'); openInChrome(u); };
-    statusBar();
-    $('bInstall').onclick = () => {
-      if (!active || !active.url) return toast('Open a web page first, then tap Add');
-      window.HR.addToHome && HR.addToHome(active.url, active.title, active.el);
-    };
-
-    return { open: (url, fresh) => { ensureTab(); const t = fresh ? newTab(url) : active; if (!fresh) navigate(t, url); }, ensureTab,
-      current: () => (active ? { url: active.url, title: active.title, frame: active.el } : null) };
-  })();
+    return div;
+  }
 
   /* ---------------- Open in Chrome + installing ---------------- */
   const UA = navigator.userAgent;
@@ -848,7 +768,7 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
   const ready = () => !!IS.evt;
   function updateInstallButton() {
     const b = $('installApp');
-    b.hidden = standalone || IS.installed;
+    b.hidden = standalone || IS.installed || !ready();
     b.querySelector('b').textContent = ready() ? 'Install HTML Runner' : 'Install HTML Runner on this device';
     b.querySelector('small').textContent = ready() ? 'Opens full screen and works offline' : 'Tap to see what Chrome still needs';
     b.classList.toggle('ready', ready());
@@ -955,7 +875,8 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && mode === 'connected') { reloaded = true; run(); } });
   }
 
-  /* ---------------- public API for ai.js ---------------- */
+  const pendingOpen = [];
+  /* ---------------- public API for the other files ---------------- */
   window.HR = {
     FILES, toast, sheet, ask, showView, run: runAndShow, openInChrome,
     getFiles: () => ({ html: editor.get('html'), css: editor.get('css'), js: editor.get('js') }),
@@ -970,13 +891,16 @@ addEventListener('unhandledrejection',function(e){s('error',['Unhandled promise 
     onView: (fn) => viewHooks.push(fn),
     buildPage, previewLink, installSelf, installSheet, installCheck,
     canServe: () => swActive() && 'caches' in window,
-    openInBrowser: (url) => { showView('browser'); browser.open(url, true); },
-    proxy, proxySheet,
+    openInBrowser: (url) => { pendingOpen.push(url); showView('browser'); }, // replaced by browser.js
+    proxy, proxySheet, siteRule, blockedCard, openFullScreen, youtubeVideo, toUrlHost: hostOf,
+    store, esc, isAndroid, isIOS, standalone: !!standalone,
+    installState: () => ({ ready: ready(), installed: !!(standalone || IS.installed) }),
+    pendingOpen: () => pendingOpen.splice(0),
     projectName: () => work.name,
   };
 
   /* ---------------- start ---------------- */
   initMonaco();
-  showView(new URLSearchParams(location.search).get('view') || 'home');
   run();
+  // the first screen is shown by home.js once every part has loaded
 })();

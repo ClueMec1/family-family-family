@@ -9,6 +9,12 @@
   const win = $('view-browser');
 
   /* ---------------- saved things ---------------- */
+  const DEFAULT_MARKS = [
+    { title: 'Wikipedia', url: 'https://en.m.wikipedia.org/' },
+    { title: 'DuckDuckGo', url: 'https://html.duckduckgo.com/html/' },
+    { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/' },
+    { title: 'Can I use', url: 'https://caniuse.com/' },
+  ];
   let marks = store.get('hr:marks', DEFAULT_MARKS);
   let hist = store.get('hr:history', []);
   const saveMarks = () => store.set('hr:marks', marks);

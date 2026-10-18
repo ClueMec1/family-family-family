@@ -9,8 +9,7 @@
   const win = $('view-browser');
 
   /* ---------------- saved things ---------------- */
-  const DEFAULT_MARKS = [];
-  let marks = store.get('hr:marks', DEFAULT_MARKS);
+  let marks = store.get('hr:marks', []);
   let hist = store.get('hr:history', []);
   const saveMarks = () => store.set('hr:marks', marks);
   const saveHist = () => store.set('hr:history', hist);
@@ -57,8 +56,6 @@
 
   /* ---------------- tabs ---------------- */
   let tabs = [], active = null, seq = 0;
-  // Every link tapped inside a page adds an entry to the phone's own history. jstack remembers whose
-  // entry is on top, so Back can step through them like Chrome does.
   let jstack = [];
 
   function newTab(url, focus = true, opener = null) {
@@ -106,7 +103,7 @@
   }
   function load(t, url) {
     t.url = url; t.title = ''; t.fresh = true; t.initial = true; t.skip = 0;
-    jstack = jstack.filter((id) => id !== t.id); // the old frame's entries go with it
+    jstack = jstack.filter((id) => id !== t.id);
     let el;
     if (url === START) { el = startPage(t); setLoading(t, false); }
     else {
@@ -139,9 +136,9 @@
   function onFrameLoad(t, f) {
     if (t.el !== f) return;
     setLoading(t, false);
-    if (t.initial) t.initial = false;               // the page we asked for
-    else if (t.skip > 0) t.skip--;                   // Back / Refresh we started
-    else { jstack.push(t.id); t.fresh = false; }      // a link tapped inside the page
+    if (t.initial) t.initial = false;
+    else if (t.skip > 0) t.skip--;
+    else { jstack.push(t.id); t.fresh = false; }
     try { const d = f.contentDocument; if (d && d.title) { t.title = d.title; renderTabs(); } } catch (e) {}
     if (t === active) paint();
   }
@@ -169,16 +166,13 @@
     if (!active) return false;
     if (closePanels()) return true;
     const t = active;
-    // 1. links tapped inside this page: let the phone's history step back (not when the phone's own Back sent us here)
     if (!fromSystem && jstack.length && jstack[jstack.length - 1] === t.id) {
       jstack.pop(); t.skip++; setLoading(t, true);
       setTimeout(() => { if (t.skip > 0) t.skip = 0; }, 3000);
       history.back();
       return true;
     }
-    // 2. pages opened from the address bar
     if (t.idx > 0) { t.idx--; load(t, t.hist[t.idx]); return true; }
-    // 3. a tab opened from another tab closes and returns to it, like Chrome
     if (t.opener && tabs.includes(t.opener)) { closeTab(t); return true; }
     return false;
   }
@@ -191,7 +185,7 @@
     if (t.el.tagName !== 'IFRAME') return load(t, t.url);
     t.skip++; setLoading(t, true);
     try { t.el.contentWindow.location.reload(); }
-    catch (e) { t.el.src = t.el.src; } // the same address again reloads without a new history entry
+    catch (e) { t.el.src = t.el.src; }
   }
 
   /* ---------------- painting the bar ---------------- */
@@ -201,8 +195,10 @@
     if (document.activeElement !== inp) inp.value = shortUrl(t.url);
     const secure = /^https:/.test(t.url);
     $('bLock').classList.toggle('show', !!t.url && t.url !== START);
-    $('bLock').classList.toggle('insecure', !!t.url && t.url !== START && !secure && !isPreview(t.url));$('bTabCount').textContent = tabs.length > 99 ? ':D' : String(tabs.length);
-    $('bmStar').classList.toggle('on', !!t.url && marks.some((m) => m.url === t.url));$('bmFwd').disabled = t.idx >= t.hist.length - 1;
+    $('bLock').classList.toggle('insecure', !!t.url && t.url !== START && !secure && !isPreview(t.url));
+    $('bTabCount').textContent = tabs.length > 99 ? ':D' : String(tabs.length);
+    $('bmStar').classList.toggle('on', !!t.url && marks.some((m) => m.url === t.url));
+    $('bmFwd').disabled = t.idx >= t.hist.length - 1;
     $('bmProxyState').textContent = proxy.active() ? 'On' : 'Off';
     drawProgress();
   }
@@ -211,7 +207,8 @@
     win.classList.add('typing');
     setTimeout(() => this.select(), 0);
   });
-  $('addrInput').addEventListener('blur', () => { win.classList.remove('typing'); setTimeout(paint, 100); });$('addrForm').onsubmit = (e) => {
+  $('addrInput').addEventListener('blur', () => { win.classList.remove('typing'); setTimeout(paint, 100); });
+  $('addrForm').onsubmit = (e) => {
     e.preventDefault();
     const v = $('addrInput').value;
     if (!active) newTab();
@@ -412,7 +409,7 @@
       current: () => (active ? { url: active.url, title: active.title, frame: active.el } : null),
       clearHistory: () => clearHistory(),
       clearBookmarks: () => { marks = []; saveMarks(); paint(); },
-      resetBookmarks: () => { marks = DEFAULT_MARKS.slice(); saveMarks(); },
+      resetBookmarks: () => { marks = []; saveMarks(); paint(); },
       showInfo: () => { $('bInfo').hidden = false; store.set('hr:binfoSeen', false); },
       engines: ENGINES, START,
       counts: () => ({ marks: marks.length, hist: hist.length, tabs: tabs.length }),

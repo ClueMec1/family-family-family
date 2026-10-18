@@ -9,7 +9,13 @@
   const win = $('view-browser');
 
   /* ---------------- saved things ---------------- */
-  let marks = store.get('hr:marks', []);
+  const DEFAULT_MARKS = [
+    { title: 'Wikipedia', url: 'https://en.m.wikipedia.org/' },
+    { title: 'DuckDuckGo', url: 'https://html.duckduckgo.com/html/' },
+    { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/' },
+    { title: 'Can I use', url: 'https://caniuse.com/' },
+  ];
+  let marks = store.get('hr:marks', DEFAULT_MARKS);
   let hist = store.get('hr:history', []);
   const saveMarks = () => store.set('hr:marks', marks);
   const saveHist = () => store.set('hr:history', hist);
@@ -56,6 +62,8 @@
 
   /* ---------------- tabs ---------------- */
   let tabs = [], active = null, seq = 0;
+  // Every link tapped inside a page adds an entry to the phone's own history. jstack remembers whose
+  // entry is on top, so Back can step through them like Chrome does.
   let jstack = [];
 
   function newTab(url, focus = true, opener = null) {
@@ -103,7 +111,7 @@
   }
   function load(t, url) {
     t.url = url; t.title = ''; t.fresh = true; t.initial = true; t.skip = 0;
-    jstack = jstack.filter((id) => id !== t.id);
+    jstack = jstack.filter((id) => id !== t.id); // the old frame's entries go with it
     let el;
     if (url === START) { el = startPage(t); setLoading(t, false); }
     else {
@@ -136,9 +144,9 @@
   function onFrameLoad(t, f) {
     if (t.el !== f) return;
     setLoading(t, false);
-    if (t.initial) t.initial = false;
-    else if (t.skip > 0) t.skip--;
-    else { jstack.push(t.id); t.fresh = false; }
+    if (t.initial) t.initial = false;               // the page we asked for
+    else if (t.skip > 0) t.skip--;                   // Back / Refresh we started
+    else { jstack.push(t.id); t.fresh = false; }      // a link tapped inside the page
     try { const d = f.contentDocument; if (d && d.title) { t.title = d.title; renderTabs(); } } catch (e) {}
     if (t === active) paint();
   }
@@ -166,13 +174,16 @@
     if (!active) return false;
     if (closePanels()) return true;
     const t = active;
+    // 1. links tapped inside this page: let the phone's history step back (not when the phone's own Back sent us here)
     if (!fromSystem && jstack.length && jstack[jstack.length - 1] === t.id) {
       jstack.pop(); t.skip++; setLoading(t, true);
       setTimeout(() => { if (t.skip > 0) t.skip = 0; }, 3000);
       history.back();
       return true;
     }
+    // 2. pages opened from the address bar
     if (t.idx > 0) { t.idx--; load(t, t.hist[t.idx]); return true; }
+    // 3. a tab opened from another tab closes and returns to it, like Chrome
     if (t.opener && tabs.includes(t.opener)) { closeTab(t); return true; }
     return false;
   }
@@ -185,7 +196,7 @@
     if (t.el.tagName !== 'IFRAME') return load(t, t.url);
     t.skip++; setLoading(t, true);
     try { t.el.contentWindow.location.reload(); }
-    catch (e) { t.el.src = t.el.src; }
+    catch (e) { t.el.src = t.el.src; } // the same address again reloads without a new history entry
   }
 
   /* ---------------- painting the bar ---------------- */
@@ -291,7 +302,7 @@
   }
   function closePanels() {
     let any = false;
-    ['bMenuPanel', 'bTabsPanel', 'bLibrary'].forEach((id) => { if (!$(id).hidden) {$(id).hidden = true; any = true; } });
+    ['bMenuPanel', 'bTabsPanel', 'bLibrary'].forEach((id) => { if (!$(id).hidden) { $(id).hidden = true; any = true; } });
     if (unOverlay) { unOverlay(); unOverlay = null; }
     return any;
   }
@@ -299,9 +310,23 @@
   win.addEventListener('click', (e) => {
     if (!$('bMenuPanel').hidden && !$('bMenuPanel').contains(e.target) && !e.target.closest('#bMenu')) closePanels();
   });
-  $('bHome').onclick = () => { if (!active) newTab(); navigate(active, homeUrl()); };$('bmFwd').onclick = () => { closePanels(); forward(); };
-  $('bmReload').onclick = () => { closePanels(); reload(); };$('bmChrome').onclick = () => { closePanels(); if (!active || !active.url || active.url === START) return toast('Open a web page first'); HR.openInChrome(active.url); };
-  $('bmStar').onclick = async () => { closePanels(); const t = active; if (!t \vert{}\vert{} !t.url \vert{}\vert{} t.url === START \vert{}\vert{} t.url.startsWith('blob:')) return toast('Open a web page first'); const i = marks.findIndex((m) => m.url === t.url); if (i >= 0) { marks.splice(i, 1); saveMarks(); toast('Bookmark removed'); } else { const n = await ask('Add bookmark', 'Name', t.title \vert{}\vert{} hostOf(t.url)); if (!n) return; marks.unshift({ title: n, url: t.url }); saveMarks(); toast('Bookmarked'); } paint(); };$('bMenuPanel').addEventListener('click', (e) => {
+  $('bHome').onclick = () => { if (!active) newTab(); navigate(active, homeUrl()); };
+  $('bmFwd').onclick = () => { closePanels(); forward(); };
+  $('bmReload').onclick = () => { closePanels(); reload(); };
+  $('bmChrome').onclick = () => { closePanels(); if (!active || !active.url || active.url === START) return toast('Open a web page first'); HR.openInChrome(active.url); };
+  $('bmStar').onclick = async () => {
+    closePanels();
+    const t = active;
+    if (!t || !t.url || t.url === START || t.url.startsWith('blob:')) return toast('Open a web page first');
+    const i = marks.findIndex((m) => m.url === t.url);
+    if (i >= 0) { marks.splice(i, 1); saveMarks(); toast('Bookmark removed'); }
+    else {
+      const n = await ask('Add bookmark', 'Name', t.title || hostOf(t.url)); if (!n) return;
+      marks.unshift({ title: n, url: t.url }); saveMarks(); toast('Bookmarked');
+    }
+    paint();
+  };
+  $('bMenuPanel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-m]'); if (!b) return;
     const m = b.dataset.m, t = active;
     closePanels();
@@ -331,7 +356,9 @@
       g.append(c);
     });
   }
-  $('bTabs').onclick = () => { if (!$('bTabsPanel').hidden) return closePanels(); openPanel('bTabsPanel'); renderTabs(); };$('bNewTab').onclick = () => { closePanels(); newTab(); setTimeout(() => $('addrInput').focus(), 50); };$('bCloseAll').onclick = () => { [...tabs].forEach((t) => { t.el.remove(); }); tabs = []; jstack = []; closePanels(); newTab(); };
+  $('bTabs').onclick = () => { if (!$('bTabsPanel').hidden) return closePanels(); openPanel('bTabsPanel'); renderTabs(); };
+  $('bNewTab').onclick = () => { closePanels(); newTab(); setTimeout(() => $('addrInput').focus(), 50); };
+  $('bCloseAll').onclick = () => { [...tabs].forEach((t) => { t.el.remove(); }); tabs = []; jstack = []; closePanels(); newTab(); };
 
   // bookmarks + history
   let libTab = 'bookmarks';
@@ -381,7 +408,7 @@
 
   /* ---------------- info banner ---------------- */
   if (!store.get('hr:binfoSeen', false)) $('bInfo').hidden = false;
-  $('bInfoClose').onclick = () => {$('bInfo').hidden = true; store.set('hr:binfoSeen', true); };
+  $('bInfoClose').onclick = () => { $('bInfo').hidden = true; store.set('hr:binfoSeen', true); };
 
   /* ---------------- page server on/off: reload what's open ---------------- */
   proxy.onChange(() => { tabs.forEach((t) => { if (t.url && t.url !== START) load(t, t.url); }); paint(); });
@@ -409,7 +436,7 @@
       current: () => (active ? { url: active.url, title: active.title, frame: active.el } : null),
       clearHistory: () => clearHistory(),
       clearBookmarks: () => { marks = []; saveMarks(); paint(); },
-      resetBookmarks: () => { marks = []; saveMarks(); paint(); },
+      resetBookmarks: () => { marks = DEFAULT_MARKS.slice(); saveMarks(); },
       showInfo: () => { $('bInfo').hidden = false; store.set('hr:binfoSeen', false); },
       engines: ENGINES, START,
       counts: () => ({ marks: marks.length, hist: hist.length, tabs: tabs.length }),

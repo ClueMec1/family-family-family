@@ -1,14 +1,13 @@
-/* HTML Runner service worker
-   - Serves your code preview at ./preview/ as a real page on this site, so Firebase sign-in, fetch and storage behave normally.
-   - Serves your own code installed on the Home screen at ./apps/<id>/.
-   - Keeps the app and the editor files cached so HTML Runner opens offline. */
-const VERSION = 'hr-v9';
-const SHELL = ['./', 'index.html', 'styles.css', 'phone.js', 'app.js', 'complete.js', 'ai.js', 'browser.js', 'settings.js', 'home.js', 'manifest.webmanifest',
-  'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
+/* HTML Runner service worker */
+const VERSION = 'hr-v10'; // Bumped version to invalidate old caches
+const SHELL = [
+  'index.html', 'styles.css', 'phone.js', 'app.js', 'complete.js', 
+  'ai.js', 'browser.js', 'settings.js', 'home.js', 'manifest.webmanifest',
+  'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'
+];
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (e) => {
-  // Cache each file on its own: one missing file must not stop the app from installing
   e.waitUntil(caches.open(VERSION)
     .then((c) => Promise.all(SHELL.map((f) => c.add(f).catch(() => console.warn('Not cached:', f)))))
     .then(() => self.skipWaiting()));
@@ -28,7 +27,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const previewBase = new URL('preview/', self.registration.scope).href;
 
-  // 1. Your code preview
+  // 1. Code preview
   if (url.href.startsWith(previewBase)) {
     e.respondWith((async () => {
       const cache = await caches.open('hr-preview');
@@ -45,7 +44,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 1b. Your own code saved as Home screen apps (apps/<id>/index.html)
+  // 1b. Home screen apps
   const appsBase = new URL('apps/', self.registration.scope).href;
   if (url.href.startsWith(appsBase)) {
     e.respondWith((async () => {
@@ -57,7 +56,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 2. Editor, fonts and libraries from CDNs: cache first
+  // 2. Editor, fonts and libraries from CDNs
   if (CDN_HOSTS.includes(url.hostname)) {
     e.respondWith((async () => {
       const cache = await caches.open(VERSION + '-cdn');
@@ -70,7 +69,13 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 3. The app itself: network first so updates arrive, cache when offline
+  // CRITICAL FIX: Never intercept manifest.webmanifest via network-first fallback 
+  // to prevent browser install state corruption. Let the browser fetch it directly.
+  if (url.pathname.endsWith('manifest.webmanifest')) {
+    return;
+  }
+
+  // 3. The app itself: network first, fallback to cache
   if (url.origin === self.location.origin) {
     e.respondWith((async () => {
       try {
@@ -80,10 +85,12 @@ self.addEventListener('fetch', (e) => {
       } catch (err) {
         const hit = await caches.match(req, { ignoreSearch: true });
         if (hit) return hit;
-        if (req.mode === 'navigate') return caches.match('index.html');
+        if (req.mode === 'navigate') {
+          // Properly resolve index.html against the service worker scope
+          return caches.match(new URL('index.html', self.registration.scope));
+        }
         throw err;
       }
     })());
   }
-  // Everything else (APIs, Firebase, websites in the browser tab) goes straight to the network.
 });

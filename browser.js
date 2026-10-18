@@ -9,12 +9,7 @@
   const win = $('view-browser');
 
   /* ---------------- saved things ---------------- */
-  const DEFAULT_MARKS = [
-    { title: 'Wikipedia', url: 'https://en.m.wikipedia.org/' },
-    { title: 'DuckDuckGo', url: 'https://html.duckduckgo.com/html/' },
-    { title: 'MDN Web Docs', url: 'https://developer.mozilla.org/' },
-    { title: 'Can I use', url: 'https://caniuse.com/' },
-  ];
+  const DEFAULT_MARKS = [];
   let marks = store.get('hr:marks', DEFAULT_MARKS);
   let hist = store.get('hr:history', []);
   const saveMarks = () => store.set('hr:marks', marks);
@@ -206,10 +201,8 @@
     if (document.activeElement !== inp) inp.value = shortUrl(t.url);
     const secure = /^https:/.test(t.url);
     $('bLock').classList.toggle('show', !!t.url && t.url !== START);
-    $('bLock').classList.toggle('insecure', !!t.url && t.url !== START && !secure && !isPreview(t.url));
-    $('bTabCount').textContent = tabs.length > 99 ? ':D' : String(tabs.length);
-    $('bmStar').classList.toggle('on', !!t.url && marks.some((m) => m.url === t.url));
-    $('bmFwd').disabled = t.idx >= t.hist.length - 1;
+    $('bLock').classList.toggle('insecure', !!t.url && t.url !== START && !secure && !isPreview(t.url));$('bTabCount').textContent = tabs.length > 99 ? ':D' : String(tabs.length);
+    $('bmStar').classList.toggle('on', !!t.url && marks.some((m) => m.url === t.url));$('bmFwd').disabled = t.idx >= t.hist.length - 1;
     $('bmProxyState').textContent = proxy.active() ? 'On' : 'Off';
     drawProgress();
   }
@@ -218,8 +211,7 @@
     win.classList.add('typing');
     setTimeout(() => this.select(), 0);
   });
-  $('addrInput').addEventListener('blur', () => { win.classList.remove('typing'); setTimeout(paint, 100); });
-  $('addrForm').onsubmit = (e) => {
+  $('addrInput').addEventListener('blur', () => { win.classList.remove('typing'); setTimeout(paint, 100); });$('addrForm').onsubmit = (e) => {
     e.preventDefault();
     const v = $('addrInput').value;
     if (!active) newTab();
@@ -302,7 +294,7 @@
   }
   function closePanels() {
     let any = false;
-    ['bMenuPanel', 'bTabsPanel', 'bLibrary'].forEach((id) => { if (!$(id).hidden) { $(id).hidden = true; any = true; } });
+    ['bMenuPanel', 'bTabsPanel', 'bLibrary'].forEach((id) => { if (!$(id).hidden) {$(id).hidden = true; any = true; } });
     if (unOverlay) { unOverlay(); unOverlay = null; }
     return any;
   }
@@ -310,23 +302,9 @@
   win.addEventListener('click', (e) => {
     if (!$('bMenuPanel').hidden && !$('bMenuPanel').contains(e.target) && !e.target.closest('#bMenu')) closePanels();
   });
-  $('bHome').onclick = () => { if (!active) newTab(); navigate(active, homeUrl()); };
-  $('bmFwd').onclick = () => { closePanels(); forward(); };
-  $('bmReload').onclick = () => { closePanels(); reload(); };
-  $('bmChrome').onclick = () => { closePanels(); if (!active || !active.url || active.url === START) return toast('Open a web page first'); HR.openInChrome(active.url); };
-  $('bmStar').onclick = async () => {
-    closePanels();
-    const t = active;
-    if (!t || !t.url || t.url === START || t.url.startsWith('blob:')) return toast('Open a web page first');
-    const i = marks.findIndex((m) => m.url === t.url);
-    if (i >= 0) { marks.splice(i, 1); saveMarks(); toast('Bookmark removed'); }
-    else {
-      const n = await ask('Add bookmark', 'Name', t.title || hostOf(t.url)); if (!n) return;
-      marks.unshift({ title: n, url: t.url }); saveMarks(); toast('Bookmarked');
-    }
-    paint();
-  };
-  $('bMenuPanel').addEventListener('click', (e) => {
+  $('bHome').onclick = () => { if (!active) newTab(); navigate(active, homeUrl()); };$('bmFwd').onclick = () => { closePanels(); forward(); };
+  $('bmReload').onclick = () => { closePanels(); reload(); };$('bmChrome').onclick = () => { closePanels(); if (!active || !active.url || active.url === START) return toast('Open a web page first'); HR.openInChrome(active.url); };
+  $('bmStar').onclick = async () => { closePanels(); const t = active; if (!t \vert{}\vert{} !t.url \vert{}\vert{} t.url === START \vert{}\vert{} t.url.startsWith('blob:')) return toast('Open a web page first'); const i = marks.findIndex((m) => m.url === t.url); if (i >= 0) { marks.splice(i, 1); saveMarks(); toast('Bookmark removed'); } else { const n = await ask('Add bookmark', 'Name', t.title \vert{}\vert{} hostOf(t.url)); if (!n) return; marks.unshift({ title: n, url: t.url }); saveMarks(); toast('Bookmarked'); } paint(); };$('bMenuPanel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-m]'); if (!b) return;
     const m = b.dataset.m, t = active;
     closePanels();
@@ -356,9 +334,7 @@
       g.append(c);
     });
   }
-  $('bTabs').onclick = () => { if (!$('bTabsPanel').hidden) return closePanels(); openPanel('bTabsPanel'); renderTabs(); };
-  $('bNewTab').onclick = () => { closePanels(); newTab(); setTimeout(() => $('addrInput').focus(), 50); };
-  $('bCloseAll').onclick = () => { [...tabs].forEach((t) => { t.el.remove(); }); tabs = []; jstack = []; closePanels(); newTab(); };
+  $('bTabs').onclick = () => { if (!$('bTabsPanel').hidden) return closePanels(); openPanel('bTabsPanel'); renderTabs(); };$('bNewTab').onclick = () => { closePanels(); newTab(); setTimeout(() => $('addrInput').focus(), 50); };$('bCloseAll').onclick = () => { [...tabs].forEach((t) => { t.el.remove(); }); tabs = []; jstack = []; closePanels(); newTab(); };
 
   // bookmarks + history
   let libTab = 'bookmarks';
@@ -408,7 +384,7 @@
 
   /* ---------------- info banner ---------------- */
   if (!store.get('hr:binfoSeen', false)) $('bInfo').hidden = false;
-  $('bInfoClose').onclick = () => { $('bInfo').hidden = true; store.set('hr:binfoSeen', true); };
+  $('bInfoClose').onclick = () => {$('bInfo').hidden = true; store.set('hr:binfoSeen', true); };
 
   /* ---------------- page server on/off: reload what's open ---------------- */
   proxy.onChange(() => { tabs.forEach((t) => { if (t.url && t.url !== START) load(t, t.url); }); paint(); });

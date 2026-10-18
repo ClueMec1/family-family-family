@@ -88,7 +88,7 @@
       row({ icon: 'search', title: 'Search engine', sub: (E[eng] || E.ddg).name, onClick: () => choose('Search engine', Object.entries(E).map(([k, v]) => [k, v.name, k === 'ddg' ? 'Works inside apps (recommended)' : '']), eng, (v) => store.set('hr:bsearch', v)) }),
       row({ icon: 'home', title: 'Home page', sub: bh === HR.browser.START ? 'New tab page' : bh, onClick: () => choose('Home page', [[HR.browser.START, 'New tab page', 'Search box, shortcuts and recent sites']].concat(bh !== HR.browser.START ? [[bh, bh, 'Set from ⋮ → Use as home page']] : []), bh, (v) => store.set('hr:bhome', v)) }),
       row({ icon: 'hist', title: 'Clear browsing history', sub: c.hist + ' pages', onClick: () => HR.browser.clearHistory() }),
-      row({ icon: 'mark', title: 'Bookmarks', sub: c.marks + ' saved · tap to reset to the starter set', onClick: () => sheet({ title: 'Reset bookmarks?', body: '<p>Your bookmarks are replaced with the starter set (Wikipedia, DuckDuckGo, MDN, Can I use).</p>', actions: [{ label: 'Cancel' }, { label: 'Reset', primary: true, onClick: () => { HR.browser.resetBookmarks(); toast('Bookmarks reset'); draw(); } }] }) }),
+      row({ icon: 'mark', title: 'Bookmarks', sub: c.marks + ' saved · tap to clear all bookmarks', onClick: () => sheet({ title: 'Clear all bookmarks?', body: '<p>This will remove all saved bookmarks.</p>', actions: [{ label: 'Cancel' }, { label: 'Clear', primary: true, onClick: () => { HR.browser.clearBookmarks(); toast('Bookmarks cleared'); draw(); } }] }) }),
       row({ icon: 'info', title: 'Why some sites stay blank', sub: 'Show the explanation in the browser again', onClick: () => { HR.browser.showInfo(); HR.showView('browser'); } }),
     );
     box.append(br);
